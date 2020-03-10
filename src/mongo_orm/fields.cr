@@ -12,12 +12,16 @@ module Mongo::ORM::Fields
   end
 
   # specify the fields you want to define and types
-  macro field(decl)
-    {% FIELDS[decl.var] = decl.type %}
+  macro field(decl, options = {} of Nil => Nil)
+    {% hash = { type_: decl.type } %}
+    {% if options.keys.includes?("default".id) %}
+      {% hash[:default] = options[:default.id] %}
+    {% end %}
+    {% FIELDS[decl.var] = hash %}
   end
 
   macro embeds(decl)
-    {% FIELDS[decl.var] = decl.type %}
+    {% FIELDS[decl.var] = {type_: decl.type} %}
     raise "can only embed classes inheriting from Mongo::ORM::EmbeddedDocument" unless {{decl.type}}.new.is_a?(Mongo::ORM::EmbeddedDocument)
   end
 
@@ -32,7 +36,7 @@ module Mongo::ORM::Fields
     def {{children_collection.id}}=(value : Array({{children_class}}))
       @{{children_collection.id}} = value
     end
-    {% SPECIAL_FIELDS[children_collection.id] = children_class %}
+    {% SPECIAL_FIELDS[children_collection.id] = {type_: children_class} %}
   end
 
   # include created_at and updated_at that will automatically be updated
@@ -42,8 +46,8 @@ module Mongo::ORM::Fields
 
   macro __process_fields
     # Create the properties
-    {% for name, type in FIELDS %}
-      property {{name.id}} : Union({{type.id}} | Nil)
+    {% for name, hash in FIELDS %}
+      property {{name.id}} : Union({{hash[:type_].id}} | Nil)
     {% end %}
     {% if SETTINGS[:timestamps] %}
       property created_at : Time?
@@ -52,7 +56,7 @@ module Mongo::ORM::Fields
 
     # keep a hash of the fields to be used for mapping
     def self.fields(fields = [] of String)
-      {% for name, type in FIELDS %}
+      {% for name, hash in FIELDS %}
         fields << "{{name.id}}"
       {% end %}
       {% if SETTINGS[:timestamps] %}
@@ -64,7 +68,7 @@ module Mongo::ORM::Fields
 
     # keep a hash of the fields to be used for mapping
     def fields(fields = {} of String => Type | Nil)
-      {% for name, type in FIELDS %}
+      {% for name, hash in FIELDS %}
         fields["{{name.id}}"] = self.{{name.id}}
       {% end %}
       {% if SETTINGS[:timestamps] %}
@@ -78,8 +82,8 @@ module Mongo::ORM::Fields
     # keep a hash of the params that will be passed to the adapter.
     def params
       parsed_params = [] of DB::Any
-      {% for name, type in FIELDS %}
-        {% if type.id == Time.id %}
+      {% for name, hash in FIELDS %}
+        {% if hash[:type_].id == Time.id %}
           parsed_params << {{name.id}}.try(&.to_s("%F %X"))
         {% else %}
           parsed_params << {{name.id}}
@@ -97,10 +101,10 @@ module Mongo::ORM::Fields
 
       fields["{{PRIMARY[:name]}}"] = {{PRIMARY[:name]}}
 
-      {% for name, type in FIELDS %}
-        {% if type.id == Time.id %}
+      {% for name, hash in FIELDS %}
+        {% if hash[:_type].id == Time.id %}
           fields["{{name}}"] = {{name.id}}.try(&.to_s("%F %X"))
-        {% elsif type.id == Slice.id %}
+        {% elsif hash[:_type].id == Slice.id %}
           fields["{{name}}"] = {{name.id}}.try(&.to_s(""))
         {% else %}
           fields["{{name}}"] = {{name.id}}
@@ -118,11 +122,11 @@ module Mongo::ORM::Fields
       json.object do
         json.field "{{PRIMARY[:name]}}", {{PRIMARY[:name]}} ? {{PRIMARY[:name]}}.to_s : nil
 
-        {% for name, type in FIELDS %}
+        {% for name, hash in FIELDS %}
           %field, %value = "{{name.id}}", {{name.id}}
-          {% if type.id == Time.id %}
+          {% if hash[:type_].id == Time.id %}
             json.field %field, %value.to_s
-          {% elsif type.id == Slice.id %}
+          {% elsif hash[:type_].id == Slice.id %}
             json.field %field, %value.id.try(&.to_s(""))
           {% else %}
             json.field %field, %value
@@ -141,17 +145,17 @@ module Mongo::ORM::Fields
         json.object do
           json.field "{{PRIMARY[:name]}}", {{PRIMARY[:name]}} ? {{PRIMARY[:name]}}.to_s : nil
 
-          {% for name, type in FIELDS %}
+          {% for name, hash in FIELDS %}
             %field, %value = "{{name.id}}", {{name.id}}
-            {% if type.id == Time.id %}
+            {% if hash[:type_].id == Time.id %}
               json.field %field, %value.to_s
-            {% elsif type.id == Slice.id %}
+            {% elsif hash[:type_].id == Slice.id %}
               json.field %field, %value.id.try(&.to_s(""))
             {% else %}
               json.field %field, %value
             {% end %}
           {% end %}
-  
+
           {% if SETTINGS[:timestamps] %}
             json.field "created_at", created_at.to_s
             json.field "updated_at", updated_at.to_s

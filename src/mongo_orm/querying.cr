@@ -14,29 +14,38 @@ module Mongo::ORM::Querying
         model = \{{@type.name.id}}.new
         model._id = bson["_id"].as(BSON::ObjectId) if bson["_id"]?
         fields = {} of String => Bool
-        \{% for name, type in SPECIAL_FIELDS %}
+
+        \{% for name, hash in FIELDS %}
           fields["\{{name.id}}"] = true
-          model.\{{name.id}} = [] of \{{type.id}}
+          model.\{{name.id}} = if \{{hash[:type_].id}}.is_a? Mongo::ORM::EmbeddedDocument.class
+            \{{hash[:type_].id}}.from_bson(bson["\{{name}}"])
+          elsif bson.has_key?("\{{name}}")
+            bson["\{{name}}"].as(Union(\{{hash[:type_].id}} | Nil))
+          elsif !bson.has_key?("\{{name}}") && \{{ hash }}.has_key?(:default)
+            \{{hash[:default]}}
+          else
+            raise "missing bson key: \{{name}}"
+          end
+          \{% if hash[:type_].id == Time %}
+            model.\{{name.id}} = model.\{{name.id}}.not_nil!.to_utc if model.\{{name.id}}
+          \{% end %}
+        \{% end %}
+
+        \{% for name, hash in SPECIAL_FIELDS %}
+          fields["\{{name.id}}"] = true
+          model.\{{name.id}} = [] of \{{hash[:type_].id}}
           if bson.has_key?("\{{name}}")
             bson["\{{name}}"].not_nil!.as(BSON).each do |item|
-              loaded = \{{type.id}}.from_bson(item.value)
+              loaded = \{{hash[:type_].id}}.from_bson(item.value)
               model.\{{name.id}} << loaded unless loaded.nil?
             end
+          elsif !bson.has_key?("\{{name}}") && \{{ hash }}.has_key?(:default)
+            \{{hash[:default]}}
           else
             raise "missing bson key: \{{name}}"
           end
         \{% end %}
-        \{% for name, type in FIELDS %}
-          fields["\{{name.id}}"] = true
-          if \{{type.id}}.is_a? Mongo::ORM::EmbeddedDocument.class
-            model.\{{name.id}} = \{{type.id}}.from_bson(bson["\{{name}}"])
-          else
-            model.\{{name.id}} = bson["\{{name}}"].as(Union(\{{type.id}} | Nil))
-          end
-          \{% if type.id == Time %}
-            model.\{{name.id}} = model.\{{name.id}}.not_nil!.to_utc if model.\{{name.id}}
-          \{% end %}
-        \{% end %}
+
         \{% if SETTINGS[:timestamps] %}
           model.created_at = bson["created_at"].as(Union(Time | Nil)) if bson["created_at"]?
           model.updated_at = bson["updated_at"].as(Union(Time | Nil)) if bson["updated_at"]?
@@ -53,10 +62,10 @@ module Mongo::ORM::Querying
       def to_bson
         bson = BSON.new
         bson["_id"] = self._id  if self._id != nil
-        \{% for name, type in FIELDS %}
-          bson["\{{name}}"] = \{{name.id}}.as(Union(\{{type.id}} | Nil))
+        \{% for name, hash in FIELDS %}
+          bson["\{{name}}"] = \{{name.id}}.as(Union(\{{hash[:type_].id}} | Nil))
         \{% end %}
-        \{% for name, type in SPECIAL_FIELDS %}
+        \{% for name, hash in SPECIAL_FIELDS %}
           \{% arr = "arr_#{name.id}" %}
           \{% appender = "appender_#{name.id}" %}
           \{{arr.id}} : BSON = BSON.new
