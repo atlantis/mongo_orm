@@ -13,7 +13,7 @@ module Mongo::ORM::Fields
 
   # specify the fields you want to define and types
   macro field(decl, options = {} of Nil => Nil)
-    {% hash = { type_: decl.type } %}
+    {% hash = {type_: decl.type} %}
     {% if options.keys.includes?("default".id) %}
       {% hash[:default] = options[:default.id] %}
     {% end %}
@@ -25,7 +25,7 @@ module Mongo::ORM::Fields
     raise "can only embed classes inheriting from Mongo::ORM::EmbeddedDocument" unless {{decl.type}}.new.is_a?(Mongo::ORM::EmbeddedDocument)
   end
 
-  macro embeds_many(children_collection, class_name=nil)
+  macro embeds_many(children_collection, class_name = nil)
     {% children_class = class_name ? class_name.id : children_collection.id[0...-1].camelcase %}
     {% children_array_class = "Array(#{children_class})" %}
     @{{children_collection.id}} = [] of {{children_class}}
