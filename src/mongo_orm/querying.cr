@@ -23,8 +23,7 @@ module Mongo::ORM::Querying
             bson["\{{name}}"].as(Union(\{{hash[:type_].id}} | Nil))
           elsif !bson.has_key?("\{{name}}") && \{{ hash }}.has_key?(:default)
             \{{hash[:default]}}
-          else
-            raise "missing bson key: \{{name}}"
+          
           end
           \{% if hash[:type_].id == Time %}
             model.\{{name.id}} = model.\{{name.id}}.not_nil!.to_utc if model.\{{name.id}}
@@ -41,8 +40,7 @@ module Mongo::ORM::Querying
             end
           elsif !bson.has_key?("\{{name}}") && \{{ hash }}.has_key?(:default)
             \{{hash[:default]}}
-          else
-            raise "missing bson key: \{{name}}"
+          
           end
         \{% end %}
 
@@ -59,23 +57,41 @@ module Mongo::ORM::Querying
         model
       end
 
-      def to_bson
+      def to_bson(only_dirty = false, exclude_nil = false)
         bson = BSON.new
         bson["_id"] = self._id  if self._id != nil
         \{% for name, hash in FIELDS %}
-          bson["\{{name}}"] = \{{name.id}}.as(Union(\{{hash[:type_].id}} | Nil))
-        \{% end %}
-        \{% for name, hash in SPECIAL_FIELDS %}
-          \{% arr = "arr_#{name.id}" %}
-          \{% appender = "appender_#{name.id}" %}
-          \{{arr.id}} : BSON = BSON.new
-          \{{appender.id}} : BSON::ArrayAppender = BSON::ArrayAppender.new(\{{arr.id}})
-          if self.\{{name.id}} != nil
-            self.\{{name}}.each do |item|
-              \{{appender.id}} << item.to_bson if item
+          if !only_dirty || self.is_dirty("\{{name}}")
+            if !exclude_nil || !\{{name.id}}.nil?
+              bson["\{{name}}"] = \{{name.id}}.as(Union(\{{hash[:type_].id}} | Nil))
             end
           end
-          bson["\{{name}}"] = \{{arr.id}}
+        \{% end %}
+        \{% for name, hash in SPECIAL_FIELDS %}
+          if \{{hash[:type_].id}} == String
+            if as_a = self.\{{name.id}}.as?(Array(String))
+              bson.append_array(\{{name.stringify}}) do |array_appender|
+                as_a.each{ |strval| array_appender << strval }
+              end
+            end
+          else
+            \{% arr = "arr_#{name.id}" %}
+            \{% appender = "appender_#{name.id}" %}
+            \{{arr.id}} : BSON = BSON.new
+            count_appends = 0
+            \{{appender.id}} : BSON::ArrayAppender = BSON::ArrayAppender.new(\{{arr.id}})
+            if self.\{{name.id}} != nil
+              self.\{{name}}.each do |item|
+                if item
+                  \{{appender.id}} << item.to_bson
+                  count_appends += 1
+                end
+              end
+            end
+            if !exclude_nil || count_appends > 0
+              bson["\{{name}}"] = \{{arr.id}}
+            end          
+          end
         \{% end %}
         \{% if SETTINGS[:timestamps] %}
           bson["created_at"] = created_at.as(Union(Time | Nil))
@@ -124,13 +140,13 @@ module Mongo::ORM::Querying
   # find_by using symbol for field name.
   def find_by(field : Symbol, value)
     field = :_id if field == :id
-    find_by(field.to_s, value) # find_by using symbol for field name.
+    find_by(field.to_s, value)  # find_by using symbol for field name.
   end
 
   # find_by returns the first row found where the field maches the value
   def find_by(field : String, value)
     row = nil
-    collection.find({field => value}, BSON.new, LibMongoC::QueryFlags::NONE, 0, 1) do |doc|
+    collection.find({ field => value }, BSON.new, LibMongoC::QueryFlags::NONE, 0, 1) do |doc|
       row = from_bson(doc)
     end
     row

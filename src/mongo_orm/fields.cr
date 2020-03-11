@@ -42,6 +42,7 @@ module Mongo::ORM::Fields
 
     def {{children_collection.id}}=(value : Array({{children_class}}))
       @{{children_collection.id}} = value
+      mark_dirty("{{children_collection.id}}")
     end
     {% SPECIAL_FIELDS[children_collection.id] = {type_: children_class} %}
   end
@@ -72,6 +73,14 @@ module Mongo::ORM::Fields
       property created_at : Time?
       property updated_at : Time?
     {% end %}
+
+    # keep a hash of the fields to be used for mapping
+    def multi_embeds(membeds = [] of {name: String, type: String})
+      {% for name, hash in SPECIAL_FIELDS %}
+      membeds << {name: "{{name.id}}", type: "{{hash[:type_].id}}"}
+      {% end %}
+      return membeds
+    end
 
     # keep a hash of the fields to be used for mapping
     def self.fields(fields = [] of String)
@@ -147,6 +156,12 @@ module Mongo::ORM::Fields
             json.field %field, %value.to_s
           {% elsif hash[:type_].id == Slice.id %}
             json.field %field, %value.id.try(&.to_s(""))
+          {% elsif hash[:type_].id == BSON::ObjectId.id %}
+            json.field %field, %value.to_s
+          {% elsif hash[:type_].id == Array(String).id %}
+            if v = %value.as?(Array(String))
+              json.field %field, v.join(",")
+            end
           {% else %}
             json.field %field, %value
           {% end %}
@@ -170,6 +185,12 @@ module Mongo::ORM::Fields
               json.field %field, %value.to_s
             {% elsif hash[:type_].id == Slice.id %}
               json.field %field, %value.id.try(&.to_s(""))
+            {% elsif hash[:type_].id == BSON::ObjectId.id %}
+              json.field %field, %value.to_s
+            {% elsif hash[:type_].id == Array(String).id %}
+              if v = %value.as?(Array(String))
+                json.field %field, v.join(",")
+              end
             {% else %}
               json.field %field, %value
             {% end %}
@@ -193,6 +214,19 @@ module Mongo::ORM::Fields
       set_attributes(args.to_h)
     end
 
+    def set_string_array(name : String, value : Array(String))
+      case name
+        {% for _name, hash in SPECIAL_FIELDS %}
+        when "{{_name.id}}"
+          {% if hash[:type_].id == String.id %}            
+            @{{_name.id}} = value         
+          {% end %}
+        {% end %}
+        else
+          puts "set_string_array field not found: #{name}"
+      end
+    end
+
     def mark_dirty(field_name : String)
       @dirty_fields << field_name
     end
@@ -202,7 +236,7 @@ module Mongo::ORM::Fields
     end
   
     def dirty_fields_to_bson
-      self.to_bson(true)
+      self.to_bson(true, true)
     end
   
     def dirty?
@@ -235,8 +269,8 @@ module Mongo::ORM::Fields
             if value.is_a?(Time)
                @{{_name.id}} = value.to_utc
              elsif value.to_s =~ TIME_FORMAT_REGEX
-               @{{_name.id}} = Time.parse(value.to_s, "%F %X").to_utc
-             end
+               @{{_name.id}} = Time.parse_utc(value.to_s, "%F %X").to_utc
+             end                    
           {% else %}
             @{{_name.id}} = value.to_s
           {% end %}

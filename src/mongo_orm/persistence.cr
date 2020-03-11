@@ -8,16 +8,15 @@ module Mongo::ORM::Persistence
     # will call the update method, otherwise it will call the create method.
     # This will update the timestamps apropriately.
     def save
-      begin
-        fields_to_update = self.dirty_fields_to_bson      
-        puts "Updating model #{self.id.to_s} #{fields_to_update.inspect}"
-        
+      begin        
+        fields_to_update = BSON.new
         __run_before_save
         if _id
           __run_before_update
           @updated_at = Time.utc
-          #@@collection.save(self)
+          
           if model_id = self.id
+            fields_to_update = self.dirty_fields_to_bson
             @@collection.update({"_id" => model_id}, {"$set" => fields_to_update})
             self.clear_dirty
           else
@@ -30,7 +29,9 @@ module Mongo::ORM::Persistence
             @created_at = Time.utc
             @updated_at = Time.utc
             self._id = BSON::ObjectId.new
-            @@collection.save(self)
+            fields_to_update = self.to_bson(false, true)
+            @@collection.save(fields_to_update)
+            return true
             __run_after_create
           else
             @errors << Mongo::ORM::Error.new(:base, "Tried to create a model that already had an id")
@@ -43,6 +44,7 @@ module Mongo::ORM::Persistence
           puts "Save Exception:"
           puts "  Message: '#{message}'"
           puts "  Object: #{self.inspect}"
+          puts "  Fields to update: #{fields_to_update.inspect}"
           @errors << Mongo::ORM::Error.new(:base, message)
         end
         return false
@@ -74,6 +76,46 @@ module Mongo::ORM::Persistence
         end
         return false
       end
+    end
+
+    def delete
+      begin        
+        __run_before_delete
+        raise "cannot delete an unsaved document!" unless self._id
+
+        if fields.includes?("deleted_at")
+          if self.deleted_at.nil?
+            debug!("about to soft delete")
+            #make sure we JUST update the dirty field and no other changes
+            self.clear_dirty
+            self.deleted_at = Time.utc
+            @@collection.update({"_id" => model_id}, {"$set" => self.dirty_fields_to_bson})
+            self.clear_dirty
+          else
+            puts "Cannot delete a document that's already been deleted"
+            #but still return true cause it's done already
+          end
+        else
+          debug!("about to hard delete")
+          self.destroy
+        end
+        
+        __run_after_delete        
+        return true
+      rescue ex
+        if message = ex.message
+          puts "Save Exception:"
+          puts "  Message: '#{message}'"
+          puts "  Object: #{self.inspect}"
+          @errors << Mongo::ORM::Error.new(:base, message)
+        end
+        return false
+      end
+    end
+
+    def delete!
+      return if delete
+      raise @errors.last
     end
   end
 end

@@ -20,7 +20,7 @@ module Mongo::ORM::Collection
   end
 
   macro __process_collection
-    {% name_space = @type.name.gsub(/::/, "_").downcase.id %}
+    {% name_space = @type.name.gsub(/::/, "_").underscore.id %}
     {% collection_name = SETTINGS[:collection_name] || name_space + "s" %}
     {% primary_name = PRIMARY[:name] %}
     {% primary_type = PRIMARY[:type] %}
