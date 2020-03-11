@@ -115,19 +115,22 @@ module Mongo::ORM::Querying
   end
 
   def find(value)
+    if strval = value.as?(String)
+      value = BSON::ObjectId.new(strval)
+    end
     return find_by(@@primary_name.to_s, value)
   end
 
   # find_by using symbol for field name.
   def find_by(field : Symbol, value)
     field = :_id if field == :id
-    find_by(field.to_s, value)  # find_by using symbol for field name.
+    find_by(field.to_s, value) # find_by using symbol for field name.
   end
 
   # find_by returns the first row found where the field maches the value
   def find_by(field : String, value)
     row = nil
-    collection.find({ field => value }, BSON.new, LibMongoC::QueryFlags::NONE, 0, 1) do |doc|
+    collection.find({field => value}, BSON.new, LibMongoC::QueryFlags::NONE, 0, 1) do |doc|
       row = from_bson(doc)
     end
     row

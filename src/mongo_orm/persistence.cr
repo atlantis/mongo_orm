@@ -9,19 +9,32 @@ module Mongo::ORM::Persistence
     # This will update the timestamps apropriately.
     def save
       begin
+        fields_to_update = self.dirty_fields_to_bson      
+        puts "Updating model #{self.id.to_s} #{fields_to_update.inspect}"
+        
         __run_before_save
         if _id
           __run_before_update
           @updated_at = Time.utc
-          @@collection.save(self)
+          #@@collection.save(self)
+          if model_id = self.id
+            @@collection.update({"_id" => model_id}, {"$set" => fields_to_update})
+            self.clear_dirty
+          else
+            @errors << Mongo::ORM::Error.new(:base, "Must have an ID to update a model")
+          end
           __run_after_update
         else
           __run_before_create
-          @created_at = Time.utc
-          @updated_at = Time.utc
-          self._id = BSON::ObjectId.new
-          @@collection.save(self)
-          __run_after_create
+          if self.id.nil?
+            @created_at = Time.utc
+            @updated_at = Time.utc
+            self._id = BSON::ObjectId.new
+            @@collection.save(self)
+            __run_after_create
+          else
+            @errors << Mongo::ORM::Error.new(:base, "Tried to create a model that already had an id")
+          end
         end
         __run_after_save
         return true

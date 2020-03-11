@@ -8,14 +8,21 @@ module Mongo::ORM::Fields
     macro inherited
       FIELDS = {} of Nil => Nil
       SPECIAL_FIELDS = {} of Nil => Nil
+
+      @[JSON::Field(ignore: true)]
+      getter? dirty_fields = [] of String
     end
   end
 
   # specify the fields you want to define and types
   macro field(decl, options = {} of Nil => Nil)
-    {% hash = {type_: decl.type} %}
+    {% not_nilable_type = decl.type.is_a?(Path) ? decl.type.resolve : (decl.type.is_a?(Union) ? decl.type.types.reject(&.resolve.nilable?).first : (decl.type.is_a?(Generic) ? decl.type.resolve : decl.type)) %}
+    {% nilable = (decl.type.is_a?(Path) ? decl.type.resolve.nilable? : (decl.type.is_a?(Union) ? decl.type.types.any?(&.resolve.nilable?) : (decl.type.is_a?(Generic) ? decl.type.resolve.nilable? : decl.type.nilable?))) %}
+    {% hash = {type_: not_nilable_type, nillable_: nilable} %}
     {% if options.keys.includes?("default".id) %}
       {% hash[:default] = options[:default.id] %}
+    {% elsif !decl.value.is_a?(Nop) %}
+      {% hash[:default] = decl.value %}
     {% end %}
     {% FIELDS[decl.var] = hash %}
   end
@@ -47,7 +54,19 @@ module Mongo::ORM::Fields
   macro __process_fields
     # Create the properties
     {% for name, hash in FIELDS %}
-      property {{name.id}} : Union({{hash[:type_].id}} | Nil)
+      #property {{name.id}} : Union({{hash[:type_].id}} | Nil)
+      def {{name.id}}=(@{{name.id}} : {{hash[:type_]}}?)
+        self.mark_dirty("{{name.id}}")
+      end
+
+      def {{name.id}} : {{hash[:type_]}}?
+        @{{name.id}}
+      end
+
+      def {{name.id}}! : {{hash[:type_]}}
+        raise NilAssertionError.new {{name.stringify}} + "#" + {{name.id.stringify}} + " cannot be nil" if @{{name.id}}.nil?
+        @{{name.id}}.not_nil!
+      end
     {% end %}
     {% if SETTINGS[:timestamps] %}
       property created_at : Time?
@@ -172,6 +191,26 @@ module Mongo::ORM::Fields
 
     def set_attributes(**args)
       set_attributes(args.to_h)
+    end
+
+    def mark_dirty(field_name : String)
+      @dirty_fields << field_name
+    end
+  
+    def unmark_dirty(field_name : String)
+      @dirty_fields.delete(field_name)
+    end
+  
+    def dirty_fields_to_bson
+      self.to_bson(true)
+    end
+  
+    def dirty?
+      @dirty_fields.size > 0
+    end
+  
+    def clear_dirty
+      @dirty_fields.clear
     end
 
     # Casts params and sets fields
