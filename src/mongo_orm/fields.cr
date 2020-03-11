@@ -177,22 +177,22 @@ module Mongo::ORM::Fields
     # Casts params and sets fields
     private def cast_to_field(name, value : Type)
       case name.to_s
-        {% for _name, type in FIELDS %}
+        {% for _name, hash in FIELDS %}
         when "{{_name.id}}"
           return @{{_name.id}} = nil if value.nil?
-          {% if type.id == BSON::ObjectId.id %}
+          {% if hash[:type_].id == BSON::ObjectId.id %}
             @{{_name.id}} = BSON::ObjectId.new value.to_s
-          {% elsif type.id == Int32.id %}
+          {% elsif hash[:type_].id == Int32.id %}
             @{{_name.id}} = value.is_a?(String) ? value.to_i32 : value.is_a?(Int64) ? value.to_s.to_i32 : value.as(Int32)
-          {% elsif type.id == Int64.id %}
+          {% elsif hash[:type_].id == Int64.id %}
             @{{_name.id}} = value.is_a?(String) ? value.to_i64 : value.as(Int64)
-          {% elsif type.id == Float32.id %}
+          {% elsif hash[:type_].id == Float32.id %}
             @{{_name.id}} = value.is_a?(String) ? value.to_f32 : value.is_a?(Float64) ? value.to_s.to_f32 : value.as(Float32)
-          {% elsif type.id == Float64.id %}
+          {% elsif hash[:type_].id == Float64.id %}
             @{{_name.id}} = value.is_a?(String) ? value.to_f64 : value.as(Float64)
-          {% elsif type.id == Bool.id %}
+          {% elsif hash[:type_].id == Bool.id %}
             @{{_name.id}} = ["1", "yes", "true", true].includes?(value)
-          {% elsif type.id == Time.id %}
+          {% elsif hash[:type_].id == Time.id %}
             if value.is_a?(Time)
                @{{_name.id}} = value.to_utc
              elsif value.to_s =~ TIME_FORMAT_REGEX
