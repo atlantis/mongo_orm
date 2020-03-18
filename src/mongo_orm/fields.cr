@@ -18,7 +18,7 @@ module Mongo::ORM::Fields
   macro field(decl, options = {} of Nil => Nil)
     {% not_nilable_type = decl.type.is_a?(Path) ? decl.type.resolve : (decl.type.is_a?(Union) ? decl.type.types.reject(&.resolve.nilable?).first : (decl.type.is_a?(Generic) ? decl.type.resolve : decl.type)) %}
     {% nilable = (decl.type.is_a?(Path) ? decl.type.resolve.nilable? : (decl.type.is_a?(Union) ? decl.type.types.any?(&.resolve.nilable?) : (decl.type.is_a?(Generic) ? decl.type.resolve.nilable? : decl.type.nilable?))) %}
-    {% hash = {type_: not_nilable_type, nillable_: nilable} %}
+    {% hash = {type_: not_nilable_type, nillable: nilable} %}
     {% if options.keys.includes?("default".id) %}
       {% hash[:default] = options[:default.id] %}
     {% elsif !decl.value.is_a?(Nop) %}
@@ -55,19 +55,27 @@ module Mongo::ORM::Fields
   macro __process_fields
     # Create the properties
     {% for name, hash in FIELDS %}
-      #property {{name.id}} : Union({{hash[:type_].id}} | Nil)
       def {{name.id}}=(@{{name.id}} : {{hash[:type_]}}?)
         self.mark_dirty("{{name.id}}")
       end
 
-      def {{name.id}} : {{hash[:type_]}}?
-        @{{name.id}}
-      end
+			{% if hash[:nillable] %}
+				def {{name.id}} : {{hash[:type_]}}?
+					@{{name.id}}
+				end
 
-      def {{name.id}}! : {{hash[:type_]}}
-        raise NilAssertionError.new {{name.stringify}} + "#" + {{name.id.stringify}} + " cannot be nil" if @{{name.id}}.nil?
-        @{{name.id}}.not_nil!
-      end
+				#Warning - if you change this function change below too
+				def {{name.id}}! : {{hash[:type_]}}
+					raise NilAssertionError.new {{name.stringify}} + "#" + {{name.id.stringify}} + " cannot be nil" if @{{name.id}}.nil?
+					@{{name.id}}.not_nil!
+				end
+			{% else %}
+				#Warning - if you change this function change above too
+				def {{name.id}} : {{hash[:type_]}}
+					raise NilAssertionError.new {{name.stringify}} + "#" + {{name.id.stringify}} + " cannot be nil" if @{{name.id}}.nil?
+					@{{name.id}}.not_nil!
+				end
+			{% end %}
     {% end %}
     {% if SETTINGS[:timestamps] %}
       property created_at : Time?
@@ -77,7 +85,7 @@ module Mongo::ORM::Fields
     # keep a hash of the fields to be used for mapping
     def multi_embeds(membeds = [] of {name: String, type: String})
       {% for name, hash in SPECIAL_FIELDS %}
-      membeds << {name: "{{name.id}}", type: "{{hash[:type_].id}}"}
+      	membeds << {name: "{{name.id}}", type: "{{hash[:type_].id}}"}
       {% end %}
       return membeds
     end
@@ -218,8 +226,8 @@ module Mongo::ORM::Fields
       case name
         {% for _name, hash in SPECIAL_FIELDS %}
         when "{{_name.id}}"
-          {% if hash[:type_].id == String.id %}            
-            @{{_name.id}} = value         
+          {% if hash[:type_].id == String.id %}
+            @{{_name.id}} = value
           {% end %}
         {% end %}
         else
@@ -230,19 +238,19 @@ module Mongo::ORM::Fields
     def mark_dirty(field_name : String)
       @dirty_fields << field_name
     end
-  
+
     def unmark_dirty(field_name : String)
       @dirty_fields.delete(field_name)
     end
-  
+
     def dirty_fields_to_bson
       self.to_bson(true, true)
     end
-  
+
     def dirty?
       @dirty_fields.size > 0
     end
-  
+
     def clear_dirty
       @dirty_fields.clear
     end
@@ -270,7 +278,7 @@ module Mongo::ORM::Fields
                @{{_name.id}} = value.to_utc
              elsif value.to_s =~ TIME_FORMAT_REGEX
                @{{_name.id}} = Time.parse_utc(value.to_s, "%F %X").to_utc
-             end                    
+             end
           {% else %}
             @{{_name.id}} = value.to_s
           {% end %}

@@ -4,6 +4,13 @@ class Object
   end
 end
 
+class String
+	def from_bson(val)
+		puts "String::from_bson val #{val}"
+    val.to_s
+  end
+end
+
 module Mongo::ORM::Querying
   macro extended
     macro __process_querying
@@ -23,24 +30,24 @@ module Mongo::ORM::Querying
             bson["\{{name}}"].as(Union(\{{hash[:type_].id}} | Nil))
           elsif !bson.has_key?("\{{name}}") && \{{ hash }}.has_key?(:default)
             \{{hash[:default]}}
-          
           end
           \{% if hash[:type_].id == Time %}
             model.\{{name.id}} = model.\{{name.id}}.not_nil!.to_utc if model.\{{name.id}}
           \{% end %}
         \{% end %}
 
-        \{% for name, hash in SPECIAL_FIELDS %}
-          fields["\{{name.id}}"] = true
-          model.\{{name.id}} = [] of \{{hash[:type_].id}}
-          if bson.has_key?("\{{name}}")
+				\{% for name, hash in SPECIAL_FIELDS %}
+					fields["\{{name.id}}"] = true
+					model.\{{name.id}} = [] of \{{hash[:type_].id}}
+					k = "\{{name}}"
+					if bson.has_key?("\{{name}}")
             bson["\{{name}}"].not_nil!.as(BSON).each do |item|
-              loaded = \{{hash[:type_].id}}.from_bson(item.value)
-              model.\{{name.id}} << loaded unless loaded.nil?
+							loaded = \{{hash[:type_].id}}.from_bson(item.value)
+							model.\{{name.id}} << loaded unless loaded.nil?
             end
           elsif !bson.has_key?("\{{name}}") && \{{ hash }}.has_key?(:default)
             \{{hash[:default]}}
-          
+
           end
         \{% end %}
 
@@ -90,7 +97,7 @@ module Mongo::ORM::Querying
             end
             if !exclude_nil || count_appends > 0
               bson["\{{name}}"] = \{{arr.id}}
-            end          
+            end
           end
         \{% end %}
         \{% if SETTINGS[:timestamps] %}
@@ -112,7 +119,11 @@ module Mongo::ORM::Querying
     end
   end
 
-  def all(query = BSON.new, skip = 0, limit = 0, batch_size = 0, flags = LibMongoC::QueryFlags::NONE, prefs = nil)
+	def all(query = BSON.new, skip = 0, limit = 0, batch_size = 0, flags = LibMongoC::QueryFlags::NONE, prefs = nil)
+		{% if @type.class.has_method? "add_find_conditions" %}
+			self.add_find_conditions(query)
+		{% end %}
+
     rows = [] of self
     collection.find(query, BSON.new, flags, skip, limit, batch_size, prefs).each do |doc|
       rows << from_bson(doc) if doc
@@ -120,21 +131,25 @@ module Mongo::ORM::Querying
     rows
   end
 
-  def all_batches(query = BSON.new, batch_size = 100)
-    collection.find(query, BSON.new, LibMongoC::QueryFlags::NONE, 0, 0, batch_size, nil).each do |doc|
+	def all_batches(query = BSON.new, batch_size = 100)
+		{% if @type.class.has_method? "add_find_conditions" %}
+			self.add_find_conditions(query)
+		{% end %}
+
+		collection.find(query, BSON.new, LibMongoC::QueryFlags::NONE, 0, 0, batch_size, nil).each do |doc|
       yield from_bson(doc)
     end
   end
 
-  def first(query = BSON.new)
-    all(query, 0, 1).first?
+	def first(query = BSON.new)
+		all(query, 0, 1).first?
   end
 
-  def find(value)
+  def find(value, query = BSON.new)
     if strval = value.as?(String)
       value = BSON::ObjectId.new(strval)
     end
-    return find_by(@@primary_name.to_s, value)
+    return find_by(@@primary_name.to_s, value, query)
   end
 
   # find_by using symbol for field name.
@@ -144,12 +159,18 @@ module Mongo::ORM::Querying
   end
 
   # find_by returns the first row found where the field maches the value
-  def find_by(field : String, value)
-    row = nil
-    collection.find({ field => value }, BSON.new, LibMongoC::QueryFlags::NONE, 0, 1) do |doc|
-      row = from_bson(doc)
+	def find_by(field : String, value, query = BSON.new)
+		query[field] = value
+
+		{% if @type.class.has_method? "add_find_conditions" %}
+			self.add_find_conditions(query)
+		{% end %}
+
+		collection.find(query, BSON.new, LibMongoC::QueryFlags::NONE, 0, 1) do |doc|
+      return from_bson(doc)
     end
-    row
+
+		nil
   end
 
   def create(**args)
