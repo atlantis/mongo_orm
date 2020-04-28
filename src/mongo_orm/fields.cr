@@ -7,7 +7,8 @@ module Mongo::ORM::Fields
   macro included
     macro inherited
       FIELDS = {} of Nil => Nil
-      SPECIAL_FIELDS = {} of Nil => Nil
+			SPECIAL_FIELDS = {} of Nil => Nil
+			EMBEDDED_FIELDS = {} of Nil => Nil
 
       @[JSON::Field(ignore: true)]
       getter? dirty_fields = [] of String
@@ -28,7 +29,7 @@ module Mongo::ORM::Fields
   end
 
   macro embeds(decl)
-    {% FIELDS[decl.var] = {type_: decl.type} %}
+    {% FIELDS[decl.var] = {type_: decl.type, nillable: true, embedded_document: true} %}
     raise "can only embed classes inheriting from Mongo::ORM::EmbeddedDocument" unless {{decl.type}}.new.is_a?(Mongo::ORM::EmbeddedDocument)
   end
 
@@ -57,6 +58,7 @@ module Mongo::ORM::Fields
     {% for name, hash in FIELDS %}
       def {{name.id}}=(@{{name.id}} : {{hash[:type_]}}?)
         self.mark_dirty("{{name.id}}")
+        # Log.debug { "Setting: {{name.id}} to #{@{{name.id}}.inspect}" }
       end
 
 			{% if hash[:nillable] %}
@@ -251,6 +253,10 @@ module Mongo::ORM::Fields
       @dirty_fields.size > 0
     end
 
+    def dirty?(field_name : String)
+      @dirty_fields.includes?(field_name)
+    end
+
     def clear_dirty
       @dirty_fields.clear
     end
@@ -278,11 +284,13 @@ module Mongo::ORM::Fields
                @{{_name.id}} = value.to_utc
              elsif value.to_s =~ TIME_FORMAT_REGEX
                @{{_name.id}} = Time.parse_utc(value.to_s, "%F %X").to_utc
-             end
-          {% else %}
+						 end
+					{% else %}
             @{{_name.id}} = value.to_s
           {% end %}
         {% end %}
+        else
+          Log.debug { "cast_to_field got nuthin" }
       end
     end
   end

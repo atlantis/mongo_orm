@@ -17,6 +17,7 @@ module Mongo::ORM::ExtendedBSON
       if @_extended_bson.has_key?(method_name_trimmed)
         set_extended_value(method_name_trimmed, {{call.args.first}})
       else
+        Log.debug { "Setting extended BSON property: #{method_name_trimmed} to #{{{call.args.first}}.inspect}" }
         @_extended_bson[method_name_trimmed] = {{call.args.first}}
       end
       return @_extended_bson[method_name_trimmed]
@@ -36,10 +37,10 @@ module Mongo::ORM::ExtendedBSON
   def set_extended_value(key, value)
     bson = BSON.new
     @_extended_bson.each_pair do |_key, _value|
-      next if _key == key 
-      bson[_key] = value 
+      next if _key == key
+      bson[_key] = value
     end
-    bson[key] = value 
+    bson[key] = value
     @_extended_bson = bson
   end
 end

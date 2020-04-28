@@ -133,6 +133,8 @@ module Mongo::ORM::EmbeddedFields
             @{{_name.id}} = value.to_s
           {% end %}
         {% end %}
+        else
+          Log.debug { "cast_to_field got nuthin" }
       end
     end
   end

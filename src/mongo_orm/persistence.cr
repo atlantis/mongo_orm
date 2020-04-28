@@ -8,13 +8,13 @@ module Mongo::ORM::Persistence
     # will call the update method, otherwise it will call the create method.
     # This will update the timestamps apropriately.
     def save
-      begin        
+      begin
         fields_to_update = BSON.new
         __run_before_save
         if _id
           __run_before_update
           @updated_at = Time.utc
-          
+
           if model_id = self.id
             fields_to_update = self.dirty_fields_to_bson
             @@collection.update({"_id" => model_id}, {"$set" => fields_to_update})
@@ -30,6 +30,7 @@ module Mongo::ORM::Persistence
             @updated_at = Time.utc
             self._id = BSON::ObjectId.new
             fields_to_update = self.to_bson(false, true)
+            Log.warn { "MADE IT: #{fields_to_update.inspect}"}
             @@collection.save(fields_to_update)
             return true
             __run_after_create
@@ -41,10 +42,7 @@ module Mongo::ORM::Persistence
         return true
       rescue ex
         if message = ex.message
-          puts "Save Exception:"
-          puts "  Message: '#{message}'"
-          puts "  Object: #{self.inspect}"
-          puts "  Fields to update: #{fields_to_update.inspect}"
+          Log.warn { "Save Exception: #{message}... fields to update: #{fields_to_update.inspect}" }
           @errors << Mongo::ORM::Error.new(:base, message)
         end
         return false
@@ -79,7 +77,7 @@ module Mongo::ORM::Persistence
     end
 
     def delete
-      begin        
+      begin
         __run_before_delete
         raise "cannot delete an unsaved document!" unless self._id
 
@@ -99,14 +97,12 @@ module Mongo::ORM::Persistence
           debug!("about to hard delete")
           self.destroy
         end
-        
-        __run_after_delete        
+
+        __run_after_delete
         return true
       rescue ex
         if message = ex.message
-          puts "Save Exception:"
-          puts "  Message: '#{message}'"
-          puts "  Object: #{self.inspect}"
+          Log.warn { "Save Exception: #{message} #{self.inspect}" }
           @errors << Mongo::ORM::Error.new(:base, message)
         end
         return false
