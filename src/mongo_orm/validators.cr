@@ -25,4 +25,8 @@ module Mongo::ORM::Validators
     end
     errors.empty?
   end
+
+  def error_messages
+    errors.map{|err| err.to_s}
+  end
 end

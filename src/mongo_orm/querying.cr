@@ -57,16 +57,22 @@ module Mongo::ORM::Querying
           model.created_at = model.created_at.not_nil!.to_utc if model.created_at
           model.updated_at = model.updated_at.not_nil!.to_utc if model.updated_at
         \{% end %}
-        bson.each_key do |key|
-          next if fields.has_key?(key)
-          model.set_extended_value(key, bson[key])
+        # bson.each_key do |key|
+        #   next if fields.has_key?(key)
+        #   model.set_extended_value(key, bson[key])
+        # end
+
+        if "\{{@type.name.id}}" == "Client"
+          Log.warn { "Freshly pulled client: #{model.to_bson.inspect}\n" }
         end
+
+        model.clear_dirty
         model
       end
 
       def to_bson(only_dirty = false, exclude_nil = true)
         bson = BSON.new
-        bson["_id"] = self._id  if self._id != nil
+        bson["_id"] = self._id  if self._id != nil && !only_dirty # id should never be dirty
         \{% for name, hash in FIELDS %}
           if !only_dirty || self.dirty?("\{{name}}")
             if !exclude_nil || !\{{name.id}}.nil?
@@ -75,38 +81,34 @@ module Mongo::ORM::Querying
           end
         \{% end %}
         \{% for name, hash in SPECIAL_FIELDS %}
-          if \{{hash[:type_].id}} == String
-            if as_a = self.\{{name.id}}.as?(Array(String))
-              bson.append_array(\{{name.stringify}}) do |array_appender|
-                as_a.each{ |strval| array_appender << strval }
-              end
-            end
-          else
+          # if \{ { hash[:type_].id}} == String
+          #   if as_a = self.\{ {name.id}}.as?(Array(String))
+          #     bson.append_array(\{ {name.stringify}}) do |array_appender|
+          #       as_a.each{ |strval| array_appender << strval }
+          #     end
+          #   end
+          # else
             \{% arr = "arr_#{name.id}" %}
-            \{% appender = "appender_#{name.id}" %}
             \{{arr.id}} : BSON = BSON.new
             count_appends = 0
-            \{{appender.id}} : BSON::ArrayAppender = BSON::ArrayAppender.new(\{{arr.id}})
-            if self.\{{name.id}} != nil
-              self.\{{name}}.each do |item|
-                if item
-                  \{{appender.id}} << item.to_bson
-                  count_appends += 1
+            if self.\{{name.id}} != nil || !exclude_nil
+              \{{arr.id}}.append_array(\{{name.stringify}}) do |array_appender|
+                if self.\{{name.id}} != nil
+                  self.\{{name}}.each do |item|
+                    array_appender << item.to_bson if item
+                  end
                 end
               end
             end
-            if !exclude_nil || count_appends > 0
-              bson["\{{name}}"] = \{{arr.id}}
-            end
-          end
+          # end
         \{% end %}
         \{% if SETTINGS[:timestamps] %}
           bson["created_at"] = created_at.as(Union(Time | Nil))
           bson["updated_at"] = updated_at.as(Union(Time | Nil))
         \{% end %}
-        extended_bson.each_key do |key|
-          bson[key] = extended_bson[key] unless bson.has_key?(key)
-        end
+        # extended_bson.each_key do |key|
+        #   bson[key] = extended_bson[key] unless bson.has_key?(key)
+        # end
         bson
       end
     end
@@ -171,6 +173,15 @@ module Mongo::ORM::Querying
     end
 
 		nil
+  end
+
+  def count(query = BSON.new, flags = LibMongoC::QueryFlags::NONE)
+    {% if @type.class.has_method? "add_find_conditions" %}
+      self.add_find_conditions(query)
+    {% end %}
+
+    rows = [] of self
+    collection.count(query, flags)
   end
 
   def create(**args)

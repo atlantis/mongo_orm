@@ -12,6 +12,9 @@ module Mongo::ORM::Fields
 
       @[JSON::Field(ignore: true)]
       getter? dirty_fields = [] of String
+
+      @[JSON::Field(ignore: true)]
+      getter? destroyed = false
     end
   end
 
@@ -57,7 +60,7 @@ module Mongo::ORM::Fields
     # Create the properties
     {% for name, hash in FIELDS %}
       def {{name.id}}=(@{{name.id}} : {{hash[:type_]}}?)
-        self.mark_dirty("{{name.id}}")
+        mark_dirty("{{name.id}}")
         # Log.debug { "Setting: {{name.id}} to #{@{{name.id}}.inspect}" }
       end
 

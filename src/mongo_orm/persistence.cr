@@ -59,12 +59,17 @@ module Mongo::ORM::Persistence
       raise @errors.last
     end
 
+    def destroyed?
+      @destroyed
+    end
+
     # Destroy will remove this from the database.
     def destroy
       raise "cannot destroy an unsaved document!" unless self._id
       begin
         __run_before_destroy
         @@collection.remove({"_id" => self._id})
+        @destroyed = true
         __run_after_destroy
         return true
       rescue ex
@@ -82,19 +87,23 @@ module Mongo::ORM::Persistence
         raise "cannot delete an unsaved document!" unless self._id
 
         if fields.includes?("deleted_at")
-          if self.deleted_at.nil?
-            debug!("about to soft delete")
-            #make sure we JUST update the dirty field and no other changes
-            self.clear_dirty
-            self.deleted_at = Time.utc
-            @@collection.update({"_id" => model_id}, {"$set" => self.dirty_fields_to_bson})
-            self.clear_dirty
-          else
-            puts "Cannot delete a document that's already been deleted"
-            #but still return true cause it's done already
-          end
+          {% for name, hash in FIELDS %}
+            {% if name.id == "deleted_at".id %}
+              if delat = self.{{name.id}}.as?(Time)
+                Log.debug { "about to soft delete" }
+                #make sure we JUST update the dirty field and no other changes
+                self.clear_dirty
+                self.deleted_at = Time.utc
+                @@collection.update({"_id" => model_id}, {"$set" => self.dirty_fields_to_bson})
+                self.clear_dirty
+              else
+                Log.warn { "Cannot delete a document that's already been deleted" }
+                #but still return true cause it's done already
+              end
+            {% end %}
+          {% end %}
         else
-          debug!("about to hard delete")
+          Log.debug { "about to hard delete" }
           self.destroy
         end
 

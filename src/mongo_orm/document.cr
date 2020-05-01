@@ -33,7 +33,7 @@ class Mongo::ORM::Document
   include Collection
   include Persistence
   include Validators
-  include ExtendedBSON
+  #include ExtendedBSON
 
   extend Querying
 
