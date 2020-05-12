@@ -1,7 +1,6 @@
 require "./embedded_fields"
 require "./associations"
 require "./embedded_bson"
-require "./extended_bson"
 
 class Mongo::ORM::EmbeddedDocument
   include EmbeddedFields
