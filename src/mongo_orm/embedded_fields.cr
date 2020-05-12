@@ -10,11 +10,14 @@ module Mongo::ORM::EmbeddedFields
     end
   end
 
-  # specify the fields you want to define and types
   macro field(decl, options = {} of Nil => Nil)
-    {% hash = { type_: decl.type } %}
+    {% not_nilable_type = decl.type.is_a?(Path) ? decl.type.resolve : (decl.type.is_a?(Union) ? decl.type.types.reject(&.resolve.nilable?).first : (decl.type.is_a?(Generic) ? decl.type.resolve : decl.type)) %}
+    {% nilable = (decl.type.is_a?(Path) ? decl.type.resolve.nilable? : (decl.type.is_a?(Union) ? decl.type.types.any?(&.resolve.nilable?) : (decl.type.is_a?(Generic) ? decl.type.resolve.nilable? : decl.type.nilable?))) %}
+    {% hash = {type_: not_nilable_type, nillable: nilable} %}
     {% if options.keys.includes?("default".id) %}
       {% hash[:default] = options[:default.id] %}
+    {% elsif !decl.value.is_a?(Nop) %}
+      {% hash[:default] = decl.value %}
     {% end %}
     {% FIELDS[decl.var] = hash %}
   end

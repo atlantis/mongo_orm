@@ -15,7 +15,7 @@ module Mongo::ORM::Associations
 
     # set the parent relationship
     def {{model_name.id}}=(parent)
-      self.{{class_name ? class_name.id.underscore.gsub(/::/,"_") : model_name.id}}_id = parent._id
+      self.{{class_name ? class_name.id.underscore.gsub(/::/,"_") : model_name.id}}_id = parent.try &._id
     end
   end
 
