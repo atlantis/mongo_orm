@@ -25,7 +25,9 @@ module Mongo::ORM::Querying
         \{% for name, hash in FIELDS %}
           fields["\{{name.id}}"] = true
           model.\{{name.id}} = if \{{hash[:type_].id}}.is_a? Mongo::ORM::EmbeddedDocument.class
-            \{{hash[:type_].id}}.from_bson(bson["\{{name}}"])
+            if embedded = bson["\{{name}}"]?
+              \{{hash[:type_].id}}.from_bson(embedded)
+            end
           elsif bson.has_key?("\{{name}}")
             bson["\{{name}}"].as(Union(\{{hash[:type_].id}} | Nil))
           elsif !bson.has_key?("\{{name}}") && \{{ hash }}.has_key?(:default)
@@ -57,14 +59,6 @@ module Mongo::ORM::Querying
           model.created_at = model.created_at.not_nil!.to_utc if model.created_at
           model.updated_at = model.updated_at.not_nil!.to_utc if model.updated_at
         \{% end %}
-        # bson.each_key do |key|
-        #   next if fields.has_key?(key)
-        #   model.set_extended_value(key, bson[key])
-        # end
-
-        if "\{{@type.name.id}}" == "Client"
-          Log.warn { "Freshly pulled client: #{model.to_bson.inspect}\n" }
-        end
 
         model.clear_dirty
         model
@@ -88,27 +82,22 @@ module Mongo::ORM::Querying
           #     end
           #   end
           # else
-            \{% arr = "arr_#{name.id}" %}
-            \{{arr.id}} : BSON = BSON.new
             count_appends = 0
             if self.\{{name.id}} != nil || !exclude_nil
-              \{{arr.id}}.append_array(\{{name.stringify}}) do |array_appender|
+              bson.append_array(\{{name.stringify}}) do |array_appender|
                 if self.\{{name.id}} != nil
                   self.\{{name}}.each do |item|
                     array_appender << item.to_bson if item
                   end
                 end
               end
-            end
+						end
           # end
         \{% end %}
         \{% if SETTINGS[:timestamps] %}
           bson["created_at"] = created_at.as(Union(Time | Nil))
           bson["updated_at"] = updated_at.as(Union(Time | Nil))
         \{% end %}
-        # extended_bson.each_key do |key|
-        #   bson[key] = extended_bson[key] unless bson.has_key?(key)
-        # end
         bson
       end
     end

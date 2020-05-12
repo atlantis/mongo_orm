@@ -71,14 +71,22 @@ module Mongo::ORM::Fields
 
 				#Warning - if you change this function change below too
 				def {{name.id}}! : {{hash[:type_]}}
-					raise NilAssertionError.new {{name.stringify}} + "#" + {{name.id.stringify}} + " cannot be nil" if @{{name.id}}.nil?
-					@{{name.id}}.not_nil!
+					{% if hash[:default] %}
+						@{{name.id}}.nil? ? {{hash[:default]}}.not_nil! : @{{name.id}}.not_nil!
+					{% else %}
+						raise NilAssertionError.new {{name.stringify}} + "#" + {{name.id.stringify}} + " cannot be nil" if @{{name.id}}.nil?
+						@{{name.id}}.not_nil!
+					{% end %}
 				end
 			{% else %}
 				#Warning - if you change this function change above too
 				def {{name.id}} : {{hash[:type_]}}
-					raise NilAssertionError.new {{name.stringify}} + "#" + {{name.id.stringify}} + " cannot be nil" if @{{name.id}}.nil?
-					@{{name.id}}.not_nil!
+					{% if hash[:default] %}
+						@{{name.id}}.nil? ? {{hash[:default]}}.not_nil! : @{{name.id}}.not_nil!
+					{% else %}
+						raise NilAssertionError.new {{name.stringify}} + "#" + {{name.id.stringify}} + " cannot be nil" if @{{name.id}}.nil?
+						@{{name.id}}.not_nil!
+					{% end %}
 				end
 			{% end %}
     {% end %}
@@ -288,8 +296,8 @@ module Mongo::ORM::Fields
              elsif value.to_s =~ TIME_FORMAT_REGEX
                @{{_name.id}} = Time.parse_utc(value.to_s, "%F %X").to_utc
 						 end
-					{% else %}
-            @{{_name.id}} = value.to_s
+					{% elsif hash[:type_].id == String.id %}
+						@{{_name.id}} = value.to_s
           {% end %}
         {% end %}
         else
