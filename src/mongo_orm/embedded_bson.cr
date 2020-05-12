@@ -19,26 +19,21 @@ module Mongo::ORM::EmbeddedBSON
           fields["\{{name.id}}"] = true
           if \{{hash[:type_].id}}.is_a? Mongo::ORM::EmbeddedDocument.class
             model.\{{name.id}} = \{{hash[:type_].id}}.from_bson(bson["\{{name}}"])
-          elsif \{{hash[:type_].id}}.is_a? Array(String)
-            model.\{{name.id}} = [] of String
+          # elsif \ { { hash[:type_].id}}.is_a? Array(String)
+          #   model.\ { { name.id}} = [] of String
           elsif bson.has_key?("\{{name}}")
             model.\{{name.id}} = bson["\{{name}}"].as(Union(\{{hash[:type_].id}} | Nil))
-          elsif !bson.has_key?("\{{name}}") && \{{ hash }}.has_key?(:default)
+          elsif !bson.has_key?("\{{name}}") && \{{hash}}.has_key?(:default)
             \{{hash[:default]}}
-
           end
           \{% if hash[:type_].id == Time %}
             model.\{{name.id}} = model.\{{name.id}}.not_nil!.to_utc if model.\{{name.id}}
           \{% end %}
         \{% end %}
-        # bson.each_key do |key|
-        #   next if fields.has_key?(key)
-        #   model.set_extended_value(key, bson[key])
-        # end
         model
       end
 
-      def to_bson
+      def to_bson(exclude_nil = true)
         bson = BSON.new
         \{% for name, hash in FIELDS %}
           if \{{hash[:type_].id}} == Array(String)
@@ -52,12 +47,11 @@ module Mongo::ORM::EmbeddedBSON
               end
             end
           else
-            bson["\{{name}}"] = \{{name.id}}.as(Union(\{{hash[:type_].id}} | Nil))
+						if self.\{{name.id}} != nil || !exclude_nil
+							bson["\{{name}}"] = \{{name.id}}.as(Union(\{{hash[:type_].id}} | Nil))
+						end
           end
         \{% end %}
-        # extended_bson.each_key do |key|
-        #   bson[key] = extended_bson[key] unless bson.has_key?(key)
-        # end
         bson
       end
     end

@@ -62,6 +62,14 @@ module Mongo::ORM::EmbeddedFields
         {% end %}
       {% end %}
       return parsed_params
+		end
+
+		# keep a hash of the fields to be used for mapping
+    def multi_embeds(membeds = [] of {name: String, type: String})
+      return [] of {name: String, type: String}
+		end
+
+		def set_string_array(name : String, value : Array(String))
     end
 
     def to_h

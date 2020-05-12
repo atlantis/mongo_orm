@@ -6,7 +6,6 @@ require "./extended_bson"
 class Mongo::ORM::EmbeddedDocument
   include EmbeddedFields
   include Associations
-  include ExtendedBSON
   extend EmbeddedBSON
 
   def equals?(val : Document)

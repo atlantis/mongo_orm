@@ -273,7 +273,9 @@ module Mongo::ORM::Fields
     end
 
     # Casts params and sets fields
-    private def cast_to_field(name, value : Type)
+		private def cast_to_field(name, value : Type)
+			mark_dirty(name.to_s)
+
       case name.to_s
         {% for _name, hash in FIELDS %}
         when "{{_name.id}}"

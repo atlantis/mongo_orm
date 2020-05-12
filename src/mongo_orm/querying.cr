@@ -30,7 +30,7 @@ module Mongo::ORM::Querying
             end
           elsif bson.has_key?("\{{name}}")
             bson["\{{name}}"].as(Union(\{{hash[:type_].id}} | Nil))
-          elsif !bson.has_key?("\{{name}}") && \{{ hash }}.has_key?(:default)
+          elsif !bson.has_key?("\{{name}}") && \{{hash }}.has_key?(:default)
             \{{hash[:default]}}
           end
           \{% if hash[:type_].id == Time %}
@@ -75,13 +75,13 @@ module Mongo::ORM::Querying
           end
         \{% end %}
         \{% for name, hash in SPECIAL_FIELDS %}
-          # if \{ { hash[:type_].id}} == String
-          #   if as_a = self.\{ {name.id}}.as?(Array(String))
-          #     bson.append_array(\{ {name.stringify}}) do |array_appender|
-          #       as_a.each{ |strval| array_appender << strval }
-          #     end
-          #   end
-          # else
+          if \{{hash[:type_].id}} == String
+            if as_a = self.\{{name.id}}.as?(Array(String))
+              bson.append_array(\{{name.stringify}}) do |array_appender|
+                as_a.each{ |strval| array_appender << strval }
+              end
+            end
+          else
             count_appends = 0
             if self.\{{name.id}} != nil || !exclude_nil
               bson.append_array(\{{name.stringify}}) do |array_appender|
@@ -92,7 +92,7 @@ module Mongo::ORM::Querying
                 end
               end
 						end
-          # end
+          end
         \{% end %}
         \{% if SETTINGS[:timestamps] %}
           bson["created_at"] = created_at.as(Union(Time | Nil))
