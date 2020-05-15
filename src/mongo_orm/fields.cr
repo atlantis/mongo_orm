@@ -1,14 +1,16 @@
 require "json"
 
 module Mongo::ORM::Fields
-  alias Type = JSON::Any | DB::Any
+  alias Type = JSON::Any | DB::Any | Mongo::ORM::EmbeddedDocument | Array(Mongo::ORM::EmbeddedDocument) | Array(String)
   TIME_FORMAT_REGEX = /\d{4,}-\d{2,}-\d{2,}\s\d{2,}:\d{2,}:\d{2,}/
 
   macro included
     macro inherited
       FIELDS = {} of Nil => Nil
 			SPECIAL_FIELDS = {} of Nil => Nil
-			EMBEDDED_FIELDS = {} of Nil => Nil
+
+			@[JSON::Field(ignore: true)]
+			getter? original_values = {} of String => Type
 
       @[JSON::Field(ignore: true)]
       getter? dirty_fields = [] of String
@@ -38,15 +40,16 @@ module Mongo::ORM::Fields
 
   macro embeds_many(children_collection, class_name = nil)
     {% children_class = class_name ? class_name.id : children_collection.id[0...-1].camelcase %}
-    {% children_array_class = "Array(#{children_class})" %}
     @{{children_collection.id}} = [] of {{children_class}}
     def {{children_collection.id}}
       @{{children_collection.id}}
     end
 
-    def {{children_collection.id}}=(value : Array({{children_class}}))
-      @{{children_collection.id}} = value
-      mark_dirty("{{children_collection.id}}")
+		def {{children_collection.id}}=(value : Array({{children_class}}))
+			unless value == @{{children_collection.id}}
+				@{{children_collection.id}} = value
+				mark_dirty("{{children_collection.id}}")
+			end
     end
     {% SPECIAL_FIELDS[children_collection.id] = {type_: children_class} %}
   end
@@ -59,8 +62,11 @@ module Mongo::ORM::Fields
   macro __process_fields
     # Create the properties
     {% for name, hash in FIELDS %}
-      def {{name.id}}=(@{{name.id}} : {{hash[:type_]}}?)
-        mark_dirty("{{name.id}}")
+			def {{name.id}}=(new_val : {{hash[:type_]}}?)
+				unless @{{name.id}} == new_val
+					mark_dirty("{{name.id}}")
+					@{{name.id}} = new_val
+				end
         # Log.debug { "Setting: {{name.id}} to #{@{{name.id}}.inspect}" }
       end
 
@@ -111,7 +117,10 @@ module Mongo::ORM::Fields
       {% if SETTINGS[:timestamps] %}
         fields << "created_at"
         fields << "updated_at"
-      {% end %}
+			{% end %}
+			{% for name, hash in SPECIAL_FIELDS %}
+				fields << "{{name.id}}"
+			{% end %}
       return fields
     end
 
@@ -124,7 +133,21 @@ module Mongo::ORM::Fields
         fields["created_at"] = self.created_at
         fields["updated_at"] = self.updated_at
       {% end %}
-      fields["_id"] = self._id
+			fields["_id"] = self._id
+			{% for name, hash in SPECIAL_FIELDS %}
+				{% if hash[:type_].id == String.id %}
+					fields["{{name.id}}"] = [] of String
+					if docs = self.{{name.id}}.as?(Array(String))
+						fields["{{name.id}}"] = docs
+					end
+				{% else %}
+					adocs = [] of Mongo::ORM::EmbeddedDocument
+					if docs = self.{{name.id}}.as?(Array({{hash[:type_].id}}))
+						docs.each{|doc| adocs << doc.as(Mongo::ORM::EmbeddedDocument)}
+					end
+					fields["{{name.id}}"] = adocs
+				{% end %}
+			{% end %}
       return fields
     end
 
@@ -249,7 +272,7 @@ module Mongo::ORM::Fields
     end
 
     def mark_dirty(field_name : String)
-      @dirty_fields << field_name
+			@dirty_fields << field_name unless @dirty_fields.includes?(field_name)
     end
 
     def unmark_dirty(field_name : String)
@@ -266,40 +289,51 @@ module Mongo::ORM::Fields
 
     def dirty?(field_name : String)
       @dirty_fields.includes?(field_name)
+		end
+
+		def dirty_fields
+			self.fields.select @dirty_fields
     end
 
     def clear_dirty
-      @dirty_fields.clear
+			@dirty_fields.clear
+			self.cache_original_values
+		end
+
+		def cache_original_values
+      @original_values = self.fields
+		end
+
+		def original_value( field_name : String )
+      @original_values[field_name]
     end
 
-    # Casts params and sets fields
+    # Casts params and sets fields - make sure to use the setter function rather than direct instance variable
 		private def cast_to_field(name, value : Type)
-			mark_dirty(name.to_s)
-
-      case name.to_s
+			case name.to_s
         {% for _name, hash in FIELDS %}
         when "{{_name.id}}"
           return @{{_name.id}} = nil if value.nil?
           {% if hash[:type_].id == BSON::ObjectId.id %}
-            @{{_name.id}} = BSON::ObjectId.new value.to_s
+            self.{{_name.id}} = BSON::ObjectId.new value.to_s
           {% elsif hash[:type_].id == Int32.id %}
-            @{{_name.id}} = value.is_a?(String) ? value.to_i32 : value.is_a?(Int64) ? value.to_s.to_i32 : value.as(Int32)
+            self.{{_name.id}} = value.is_a?(String) ? value.to_i32 : value.is_a?(Int64) ? value.to_s.to_i32 : value.as(Int32)
           {% elsif hash[:type_].id == Int64.id %}
-            @{{_name.id}} = value.is_a?(String) ? value.to_i64 : value.as(Int64)
+            self.{{_name.id}} = value.is_a?(String) ? value.to_i64 : value.as(Int64)
           {% elsif hash[:type_].id == Float32.id %}
-            @{{_name.id}} = value.is_a?(String) ? value.to_f32 : value.is_a?(Float64) ? value.to_s.to_f32 : value.as(Float32)
+            self.{{_name.id}} = value.is_a?(String) ? value.to_f32 : value.is_a?(Float64) ? value.to_s.to_f32 : value.as(Float32)
           {% elsif hash[:type_].id == Float64.id %}
-            @{{_name.id}} = value.is_a?(String) ? value.to_f64 : value.as(Float64)
+           self.@{{_name.id}} = value.is_a?(String) ? value.to_f64 : value.as(Float64)
           {% elsif hash[:type_].id == Bool.id %}
-            @{{_name.id}} = ["1", "yes", "true", true].includes?(value)
+            self.{{_name.id}} = ["1", "yes", "true", true].includes?(value)
           {% elsif hash[:type_].id == Time.id %}
             if value.is_a?(Time)
-               @{{_name.id}} = value.to_utc
+               self.{{_name.id}} = value.to_utc
              elsif value.to_s =~ TIME_FORMAT_REGEX
-               @{{_name.id}} = Time.parse_utc(value.to_s, "%F %X").to_utc
+               self.{{_name.id}} = Time.parse_utc(value.to_s, "%F %X").to_utc
 						 end
 					{% elsif hash[:type_].id == String.id %}
-						@{{_name.id}} = value.to_s
+						self.{{_name.id}} = value.to_s
           {% end %}
         {% end %}
         else

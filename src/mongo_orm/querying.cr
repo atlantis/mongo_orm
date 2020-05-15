@@ -60,7 +60,8 @@ module Mongo::ORM::Querying
           model.updated_at = model.updated_at.not_nil!.to_utc if model.updated_at
         \{% end %}
 
-        model.clear_dirty
+				model.clear_dirty
+				model.cache_original_values
         model
       end
 

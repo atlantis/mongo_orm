@@ -145,7 +145,7 @@ module Mongo::ORM::EmbeddedFields
           {% end %}
         {% end %}
         else
-          Log.debug { "cast_to_field got nuthin" }
+          Log.debug { "cast_to_field got nuthin for #{name.to_s}" }
       end
     end
   end
