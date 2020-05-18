@@ -35,7 +35,7 @@ module Mongo::ORM::Fields
 
   macro embeds(decl)
     {% FIELDS[decl.var] = {type_: decl.type, nillable: true, embedded_document: true} %}
-    raise "can only embed classes inheriting from Mongo::ORM::EmbeddedDocument" unless {{decl.type}}.new.is_a?(Mongo::ORM::EmbeddedDocument)
+    #raise "can only embed classes inheriting from Mongo::ORM::EmbeddedDocument" unless {{decl.type}}.new.is_a?(Mongo::ORM::EmbeddedDocument)
   end
 
   macro embeds_many(children_collection, class_name = nil)

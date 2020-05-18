@@ -5,13 +5,16 @@ require "./embedded_bson"
 class Mongo::ORM::EmbeddedDocument
   include EmbeddedFields
   include Associations
-  extend EmbeddedBSON
+	extend EmbeddedBSON
 
-  def equals?(val : Document)
+	def equals?(val : Document)
     self.to_h.to_s == val.to_h.to_s
   end
 
-  macro inherited
+	macro inherited
+		def initialize
+		end
+
     macro finished
       __process_embedded_fields
       __process_embedded_bson

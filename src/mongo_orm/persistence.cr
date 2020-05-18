@@ -10,13 +10,14 @@ module Mongo::ORM::Persistence
     def save
       begin
         fields_to_update = BSON.new
-        __run_before_save
-        if _id
+				__run_before_save
+				if _id
           __run_before_update
           @updated_at = Time.utc
 
           if model_id = self.id
-            fields_to_update = self.dirty_fields_to_bson
+						fields_to_update = self.dirty_fields_to_bson
+						Log.debug { "save() updating dirty fields: #{fields_to_update.inspect}"}
             @@collection.update({"_id" => model_id}, {"$set" => fields_to_update})
           else
             @errors << Mongo::ORM::Error.new(:base, "Must have an ID to update a model")
@@ -29,9 +30,8 @@ module Mongo::ORM::Persistence
             @updated_at = Time.utc
             self._id = BSON::ObjectId.new
             fields_to_update = self.to_bson(false, true)
-            Log.warn { "MADE IT: #{fields_to_update.inspect}"}
-            @@collection.save(fields_to_update)
-            return true
+            Log.debug { "save() creating fields: #{fields_to_update.inspect}"}
+            @@collection.save(fields_to_update) unless fields_to_update.empty?
             __run_after_create
           else
             @errors << Mongo::ORM::Error.new(:base, "Tried to create a model that already had an id")

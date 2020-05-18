@@ -6,7 +6,8 @@ module Mongo::ORM::EmbeddedFields
 
   macro included
     macro inherited
-      FIELDS = {} of Nil => Nil
+			FIELDS = {} of Nil => Nil
+			SPECIAL_FIELDS = {} of Nil => Nil
     end
   end
 
@@ -24,7 +25,23 @@ module Mongo::ORM::EmbeddedFields
 
   macro embeds(decl)
     {% FIELDS[decl.var] = {type_: decl.type} %}
-    raise "can only embed classes inheriting from Mongo::ORM::EmbeddedDocument" unless {{decl.type}}.new.is_a?(Mongo::ORM::EmbeddedDocument)
+    #raise "can only embed classes inheriting from Mongo::ORM::EmbeddedDocument" unless {{decl.type}}.new.is_a?(Mongo::ORM::EmbeddedDocument)
+	end
+
+	macro embeds_many(children_collection, class_name = nil)
+    {% children_class = class_name ? class_name.id : children_collection.id[0...-1].camelcase %}
+    @{{children_collection.id}} = [] of {{children_class}}
+    def {{children_collection.id}}
+      @{{children_collection.id}}
+    end
+
+		def {{children_collection.id}}=(value : Array({{children_class}}))
+			unless value == @{{children_collection.id}}
+				@{{children_collection.id}} = value
+				#mark_dirty("{{children_collection.id}}")
+			end
+    end
+    {% SPECIAL_FIELDS[children_collection.id] = {type_: children_class} %}
   end
 
   # include created_at and updated_at that will automatically be updated
