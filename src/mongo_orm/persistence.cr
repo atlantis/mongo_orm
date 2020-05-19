@@ -17,8 +17,16 @@ module Mongo::ORM::Persistence
 
           if model_id = self.id
 						fields_to_update = self.dirty_fields_to_bson
-						Log.debug { "save() updating dirty fields: #{fields_to_update.inspect}"}
-            @@collection.update({"_id" => model_id}, {"$set" => fields_to_update})
+						fields_to_unset = self.nil_dirty_fields_to_bson
+						Log.debug { "save() updating dirty fields: #{fields_to_update.inspect} unseting dirty fields: #{fields_to_unset.inspect}"}
+						bson = BSON.new
+						bson["$set"] = fields_to_update unless fields_to_update.empty?
+						bson["$unset"] = fields_to_unset unless fields_to_unset.empty?
+						unless fields_to_update.empty? && fields_to_unset.empty?
+							@@collection.update({"_id" => model_id}, bson)
+						else
+							Log.debug { "save() skipping operation cause no dirty fields!" }
+						end
           else
             @errors << Mongo::ORM::Error.new(:base, "Must have an ID to update a model")
 					end
@@ -47,7 +55,11 @@ module Mongo::ORM::Persistence
         end
         return false
       end
-    end
+		end
+
+		def persisted?
+			(self._id)
+		end
 
     def save!
       return if save

@@ -281,7 +281,17 @@ module Mongo::ORM::Fields
 
     def dirty_fields_to_bson
       self.to_bson(true, true)
-    end
+		end
+
+		def nil_dirty_fields_to_bson
+			bson = BSON.new
+			self.dirty_fields.each do |field, value|
+				if value.nil?
+					bson[field] = nil
+				end
+			end
+			bson
+		end
 
     def dirty?
       @dirty_fields.size > 0
@@ -313,7 +323,7 @@ module Mongo::ORM::Fields
 			case name.to_s
         {% for _name, hash in FIELDS %}
         when "{{_name.id}}"
-          return @{{_name.id}} = nil if value.nil?
+          return self.{{_name.id}} = nil if value.nil?
           {% if hash[:type_].id == BSON::ObjectId.id %}
             self.{{_name.id}} = BSON::ObjectId.new value.to_s
           {% elsif hash[:type_].id == Int32.id %}

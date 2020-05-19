@@ -65,13 +65,15 @@ module Mongo::ORM::Querying
         model
       end
 
-      def to_bson(only_dirty = false, exclude_nil = true)
+      def to_bson(only_dirty = false, exclude_nil = true, only_nil = false)
         bson = BSON.new
         bson["_id"] = self._id  if self._id != nil && !only_dirty # id should never be dirty
         \{% for name, hash in FIELDS %}
           if !only_dirty || self.dirty?("\{{name}}")
-            if !exclude_nil || !\{{name.id}}.nil?
-              bson["\{{name}}"] = \{{name.id}}.as(Union(\{{hash[:type_].id}} | Nil))
+            if (!exclude_nil || !\{{name.id}}.nil?)
+							bson["\{{name}}"] = \{{name.id}}.as(Union(\{{hash[:type_].id}} | Nil))
+						elsif only_nil && \{{name.id}}.nil?
+							bson["\{{name}}"] = nil
             end
           end
         \{% end %}
