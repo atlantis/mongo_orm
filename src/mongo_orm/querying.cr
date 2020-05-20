@@ -120,25 +120,27 @@ module Mongo::ORM::Querying
             end
           end
         \{% end %}
-        \{% for name, hash in SPECIAL_FIELDS %}
-          if \{{hash[:type].id}} == String
-            if as_a = self.\{{name.id}}.as?(Array(String))
-              bson.append_array(\{{name.stringify}}) do |array_appender|
-                as_a.each{ |strval| array_appender << strval }
-              end
-            end
-          else
-            count_appends = 0
-            if self.\{{name.id}} != nil || !exclude_nil
-              bson.append_array(\{{name.stringify}}) do |array_appender|
-                if self.\{{name.id}} != nil
-                  self.\{{name}}.each do |item|
-                    array_appender << item.to_bson if item
-                  end
-                end
-              end
+				\{% for name, hash in SPECIAL_FIELDS %}
+					if !only_dirty || self.dirty?("\{{name}}")
+						if \{{hash[:type].id}} == String
+							if as_a = self.\{{name.id}}.as?(Array(String))
+								bson.append_array(\{{name.stringify}}) do |array_appender|
+									as_a.each{ |strval| array_appender << strval }
+								end
+							end
+						else
+							count_appends = 0
+							if self.\{{name.id}} != nil || !exclude_nil
+								bson.append_array(\{{name.stringify}}) do |array_appender|
+									if self.\{{name.id}} != nil
+										self.\{{name}}.each do |item|
+											array_appender << item.to_bson if item
+										end
+									end
+								end
+							end
 						end
-          end
+					end
         \{% end %}
         \{% if SETTINGS[:timestamps] %}
           bson["created_at"] = created_at.as(Union(Time | Nil))

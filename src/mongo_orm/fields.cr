@@ -13,7 +13,7 @@ module Mongo::ORM::Fields
 			getter? original_values = {} of String => Type
 
       @[JSON::Field(ignore: true)]
-      getter? dirty_fields = [] of String
+      getter? dirty_field_names = [] of String
 
       @[JSON::Field(ignore: true)]
       getter? destroyed = false
@@ -143,8 +143,8 @@ module Mongo::ORM::Fields
 					end
 				{% else %}
 					adocs = [] of Mongo::ORM::EmbeddedDocument
-					if docs = self.{{name.id}}.as?(Array({{hash[:type].id}}))
-						docs.each{|doc| adocs << doc.as(Mongo::ORM::EmbeddedDocument)}
+					self.{{name.id}}.each do |doc|
+						adocs << doc.as(Mongo::ORM::EmbeddedDocument)
 					end
 					fields["{{name.id}}"] = adocs
 				{% end %}
@@ -273,11 +273,11 @@ module Mongo::ORM::Fields
     end
 
     def mark_dirty(field_name : String)
-			@dirty_fields << field_name unless @dirty_fields.includes?(field_name)
+			@dirty_field_names << field_name unless @dirty_field_names.includes?(field_name)
     end
 
     def unmark_dirty(field_name : String)
-      @dirty_fields.delete(field_name)
+      @dirty_field_names.delete(field_name)
     end
 
     def dirty_fields_to_bson
@@ -295,19 +295,19 @@ module Mongo::ORM::Fields
 		end
 
     def dirty?
-      @dirty_fields.size > 0
+      @dirty_field_names.size > 0
     end
 
     def dirty?(field_name : String)
-      @dirty_fields.includes?(field_name)
+      @dirty_field_names.includes?(field_name)
 		end
 
 		def dirty_fields
-			self.fields.select @dirty_fields
+			self.fields.select @dirty_field_names
     end
 
     def clear_dirty
-			@dirty_fields.clear
+			@dirty_field_names.clear
 			self.cache_original_values
 		end
 
