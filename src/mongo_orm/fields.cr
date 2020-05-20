@@ -27,7 +27,6 @@ module Mongo::ORM::Fields
     {% hash = {type: not_nilable_type, nillable: nilable} %}
     {% if !decl.value.is_a?(Nop) %}
 			{% hash[:default] = decl.value %}
-			@{{decl.var}} : {{not_nilable_type}}? = {{hash[:default]}}
     {% end %}
     {% FIELDS[decl.var] = hash %}
   end
@@ -37,20 +36,27 @@ module Mongo::ORM::Fields
     #raise "can only embed classes inheriting from Mongo::ORM::EmbeddedDocument" unless {{decl.type}}.new.is_a?(Mongo::ORM::EmbeddedDocument)
   end
 
-  macro embeds_many(children_collection, class_name = nil)
-    {% children_class = class_name ? class_name.id : children_collection.id[0...-1].camelcase %}
-    @{{children_collection.id}} = [] of {{children_class}}
-    def {{children_collection.id}}
-      @{{children_collection.id}}
+	macro embeds_many(children_collection)
+		{% if children_collection.is_a?(SymbolLiteral) %}
+			{% children_class = children_collection.id[0...-1].camelcase %}
+			{% collection_name = children_collection.id %}
+		{% else %}
+			{% children_class = children_collection.type.id %}
+			{% collection_name = children_collection.var.id %}
+		{% end %}
+    @{{collection_name}} = [] of {{children_class}}
+    def {{collection_name}}
+      @{{collection_name}}
     end
 
-		def {{children_collection.id}}=(value : Array({{children_class}}))
-			unless value == @{{children_collection.id}}
-				@{{children_collection.id}} = value
-				mark_dirty("{{children_collection.id}}")
+		def {{collection_name}}=(value : Array({{children_class}}))
+			unless value == @{{collection_name}}
+				@{{collection_name}} = value
+				mark_dirty("{{collection_name}}")
 			end
-    end
-    {% SPECIAL_FIELDS[children_collection.id] = {type: children_class} %}
+		end
+
+    {% SPECIAL_FIELDS[collection_name] = {type: children_class} %}
   end
 
   # include created_at and updated_at that will automatically be updated
@@ -60,7 +66,11 @@ module Mongo::ORM::Fields
 
   macro __process_fields
     # Create the properties
-    {% for name, hash in FIELDS %}
+		{% for name, hash in FIELDS %}
+			{% if hash[:default] %}
+				@{{name.id}} : {{hash[:type]}}? = {{hash[:default]}}
+			{% end %}
+
 			def {{name.id}}=(new_val : {{hash[:type]}}?)
 				unless @{{name.id}} == new_val
 					mark_dirty("{{name.id}}")
@@ -118,7 +128,7 @@ module Mongo::ORM::Fields
     # keep a hash of the fields to be used for mapping
     def fields(fields = {} of String => Type | Nil)
       {% for name, hash in FIELDS %}
-        fields["{{name.id}}"] = self.{{name.id}}
+        fields["{{name.id}}"] = @{{name.id}}
       {% end %}
       {% if SETTINGS[:timestamps] %}
         fields["created_at"] = self.created_at

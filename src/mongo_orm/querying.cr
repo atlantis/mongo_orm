@@ -66,16 +66,16 @@ module Mongo::ORM::Querying
         fields = {} of String => Bool
 
         \{% for name, hash in FIELDS %}
-          fields["\{{name.id}}"] = true
-          model.\{{name.id}} = if \{{hash[:type].id}}.is_a? Mongo::ORM::EmbeddedDocument.class
-            if embedded = bson["\{{name}}"]?
-              \{{hash[:type].id}}.from_bson(embedded)
-            end
-          elsif bson.has_key?("\{{name}}")
-            bson["\{{name}}"].as(Union(\{{hash[:type].id}} | Nil))
-          elsif !bson.has_key?("\{{name}}") && \{{hash }}.has_key?(:default)
-            \{{hash[:default]}}
-          end
+					fields["\{{name.id}}"] = true
+					if bson.has_key?("\{{name}}")
+						model.\{{name.id}} = if \{{hash[:type].id}}.is_a? Mongo::ORM::EmbeddedDocument.class
+							if embedded = bson["\{{name}}"]?
+								\{{hash[:type].id}}.from_bson(embedded)
+							end
+						else bson.has_key?("\{{name}}")
+							bson["\{{name}}"].as(Union(\{{hash[:type].id}} | Nil))
+						end
+					end
           \{% if hash[:type].id == Time %}
             model.\{{name.id}} = model.\{{name.id}}.not_nil!.to_utc if model.\{{name.id}}
           \{% end %}
