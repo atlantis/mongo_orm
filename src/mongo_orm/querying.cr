@@ -5,10 +5,53 @@ class Object
 end
 
 class String
-	def from_bson(val)
-		puts "String::from_bson val #{val}"
-    val.to_s
-  end
+	def self.from_bson(val)
+	  val.as?(self)
+	end
+
+	def to_bson
+    self
+	end
+end
+
+struct Float32
+	def self.from_bson(val)
+		val.as?(self)
+	end
+
+	def to_bson
+		self
+	end
+end
+
+struct Float64
+	def self.from_bson(val)
+		val.as?(self)
+	end
+
+	def to_bson
+		self
+	end
+end
+
+struct Int32
+	def self.from_bson(val)
+		val.as?(self)
+	end
+
+	def to_bson
+		self
+	end
+end
+
+struct Int64
+	def self.from_bson(val)
+		val.as?(self)
+	end
+
+	def to_bson
+		self
+	end
 end
 
 module Mongo::ORM::Querying

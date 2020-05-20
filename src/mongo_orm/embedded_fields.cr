@@ -1,7 +1,7 @@
 require "json"
 
 module Mongo::ORM::EmbeddedFields
-  alias Type = JSON::Any | DB::Any
+  alias Type = JSON::Any | DB::Any | Array(String) | Array(BSON::ObjectId) | Array(Int32) | Array(Float32)
   TIME_FORMAT_REGEX = /\d{4,}-\d{2,}-\d{2,}\s\d{2,}:\d{2,}:\d{2,}/
 
   macro included
@@ -57,7 +57,10 @@ module Mongo::ORM::EmbeddedFields
     def self.fields(fields = [] of String)
       {% for name, hash in FIELDS %}
         fields << "{{name.id}}"
-      {% end %}
+			{% end %}
+			{% for name, hash in SPECIAL_FIELDS %}
+				fields << "{{name.id}}"
+			{% end %}
       return fields
     end
 
@@ -65,7 +68,21 @@ module Mongo::ORM::EmbeddedFields
     def fields(fields = {} of String => Type | Nil)
       {% for name, hash in FIELDS %}
         fields["{{name.id}}"] = self.{{name.id}}
-      {% end %}
+			{% end %}
+			{% for name, hash in SPECIAL_FIELDS %}
+				{% if hash[:type].id == String.id || hash[:type].id == BSON::ObjectId.id || hash[:type].id == Int32.id || hash[:type].id == Float32.id || hash[:type].id == Int64.id || hash[:type].id == Float64.id %}
+					fields["{{name.id}}"] = [] of {{hash[:type].id}}
+					if docs = self.{{name.id}}.as?(Array({{hash[:type].id}}))
+						fields["{{name.id}}"] = docs
+					end
+				{% else %}
+					adocs = [] of Mongo::ORM::EmbeddedDocument
+					if docs = self.{{name.id}}.as?(Array({{hash[:type].id}}))
+						docs.each{|doc| adocs << doc.as(Mongo::ORM::EmbeddedDocument)}
+					end
+					fields["{{name.id}}"] = adocs
+				{% end %}
+			{% end %}
       return fields
     end
 
