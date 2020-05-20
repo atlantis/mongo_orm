@@ -24,27 +24,27 @@ module Mongo::ORM::Querying
 
         \{% for name, hash in FIELDS %}
           fields["\{{name.id}}"] = true
-          model.\{{name.id}} = if \{{hash[:type_].id}}.is_a? Mongo::ORM::EmbeddedDocument.class
+          model.\{{name.id}} = if \{{hash[:type].id}}.is_a? Mongo::ORM::EmbeddedDocument.class
             if embedded = bson["\{{name}}"]?
-              \{{hash[:type_].id}}.from_bson(embedded)
+              \{{hash[:type].id}}.from_bson(embedded)
             end
           elsif bson.has_key?("\{{name}}")
-            bson["\{{name}}"].as(Union(\{{hash[:type_].id}} | Nil))
+            bson["\{{name}}"].as(Union(\{{hash[:type].id}} | Nil))
           elsif !bson.has_key?("\{{name}}") && \{{hash }}.has_key?(:default)
             \{{hash[:default]}}
           end
-          \{% if hash[:type_].id == Time %}
+          \{% if hash[:type].id == Time %}
             model.\{{name.id}} = model.\{{name.id}}.not_nil!.to_utc if model.\{{name.id}}
           \{% end %}
         \{% end %}
 
 				\{% for name, hash in SPECIAL_FIELDS %}
 					fields["\{{name.id}}"] = true
-					model.\{{name.id}} = [] of \{{hash[:type_].id}}
+					model.\{{name.id}} = [] of \{{hash[:type].id}}
 					k = "\{{name}}"
 					if bson.has_key?("\{{name}}")
             bson["\{{name}}"].not_nil!.as(BSON).each do |item|
-							loaded = \{{hash[:type_].id}}.from_bson(item.value)
+							loaded = \{{hash[:type].id}}.from_bson(item.value)
 							model.\{{name.id}} << loaded unless loaded.nil?
             end
           elsif !bson.has_key?("\{{name}}") && \{{ hash }}.has_key?(:default)
@@ -71,14 +71,14 @@ module Mongo::ORM::Querying
         \{% for name, hash in FIELDS %}
           if !only_dirty || self.dirty?("\{{name}}")
             if (!exclude_nil || !\{{name.id}}.nil?)
-							bson["\{{name}}"] = \{{name.id}}.as(Union(\{{hash[:type_].id}} | Nil))
+							bson["\{{name}}"] = \{{name.id}}.as(Union(\{{hash[:type].id}} | Nil))
 						elsif only_nil && \{{name.id}}.nil?
 							bson["\{{name}}"] = nil
             end
           end
         \{% end %}
         \{% for name, hash in SPECIAL_FIELDS %}
-          if \{{hash[:type_].id}} == String
+          if \{{hash[:type].id}} == String
             if as_a = self.\{{name.id}}.as?(Array(String))
               bson.append_array(\{{name.stringify}}) do |array_appender|
                 as_a.each{ |strval| array_appender << strval }

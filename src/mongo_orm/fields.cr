@@ -1,7 +1,7 @@
 require "json"
 
 module Mongo::ORM::Fields
-  alias Type = JSON::Any | DB::Any | Mongo::ORM::EmbeddedDocument | Array(Mongo::ORM::EmbeddedDocument) | Array(String)
+  alias Type = JSON::Any | DB::Any | Mongo::ORM::EmbeddedDocument | Array(Mongo::ORM::EmbeddedDocument) | Array(String) | Array(BSON::ObjectId)
   TIME_FORMAT_REGEX = /\d{4,}-\d{2,}-\d{2,}\s\d{2,}:\d{2,}:\d{2,}/
 
   macro included
@@ -24,17 +24,16 @@ module Mongo::ORM::Fields
   macro field(decl, options = {} of Nil => Nil)
     {% not_nilable_type = decl.type.is_a?(Path) ? decl.type.resolve : (decl.type.is_a?(Union) ? decl.type.types.reject(&.resolve.nilable?).first : (decl.type.is_a?(Generic) ? decl.type.resolve : decl.type)) %}
     {% nilable = (decl.type.is_a?(Path) ? decl.type.resolve.nilable? : (decl.type.is_a?(Union) ? decl.type.types.any?(&.resolve.nilable?) : (decl.type.is_a?(Generic) ? decl.type.resolve.nilable? : decl.type.nilable?))) %}
-    {% hash = {type_: not_nilable_type, nillable: nilable} %}
-    {% if options.keys.includes?("default".id) %}
-      {% hash[:default] = options[:default.id] %}
-    {% elsif !decl.value.is_a?(Nop) %}
-      {% hash[:default] = decl.value %}
+    {% hash = {type: not_nilable_type, nillable: nilable} %}
+    {% if !decl.value.is_a?(Nop) %}
+			{% hash[:default] = decl.value %}
+			@{{decl.var}} : {{not_nilable_type}}? = {{hash[:default]}}
     {% end %}
     {% FIELDS[decl.var] = hash %}
   end
 
   macro embeds(decl)
-    {% FIELDS[decl.var] = {type_: decl.type, nillable: true, embedded_document: true} %}
+    {% FIELDS[decl.var] = {type: decl.type, nillable: true, embedded_document: true} %}
     #raise "can only embed classes inheriting from Mongo::ORM::EmbeddedDocument" unless {{decl.type}}.new.is_a?(Mongo::ORM::EmbeddedDocument)
   end
 
@@ -51,7 +50,7 @@ module Mongo::ORM::Fields
 				mark_dirty("{{children_collection.id}}")
 			end
     end
-    {% SPECIAL_FIELDS[children_collection.id] = {type_: children_class} %}
+    {% SPECIAL_FIELDS[children_collection.id] = {type: children_class} %}
   end
 
   # include created_at and updated_at that will automatically be updated
@@ -62,7 +61,7 @@ module Mongo::ORM::Fields
   macro __process_fields
     # Create the properties
     {% for name, hash in FIELDS %}
-			def {{name.id}}=(new_val : {{hash[:type_]}}?)
+			def {{name.id}}=(new_val : {{hash[:type]}}?)
 				unless @{{name.id}} == new_val
 					mark_dirty("{{name.id}}")
 					@{{name.id}} = new_val
@@ -71,28 +70,20 @@ module Mongo::ORM::Fields
       end
 
 			{% if hash[:nillable] %}
-				def {{name.id}} : {{hash[:type_]}}?
+				def {{name.id}} : {{hash[:type]}}?
 					@{{name.id}}
 				end
 
 				#Warning - if you change this function change below too
-				def {{name.id}}! : {{hash[:type_]}}
-					{% if hash[:default] %}
-						@{{name.id}}.nil? ? {{hash[:default]}}.not_nil! : @{{name.id}}.not_nil!
-					{% else %}
-						raise NilAssertionError.new {{name.stringify}} + "#" + {{name.id.stringify}} + " cannot be nil" if @{{name.id}}.nil?
-						@{{name.id}}.not_nil!
-					{% end %}
+				def {{name.id}}! : {{hash[:type]}}
+					raise NilAssertionError.new {{name.stringify}} + "#" + {{name.id.stringify}} + " cannot be nil" if @{{name.id}}.nil?
+					@{{name.id}}.not_nil!
 				end
 			{% else %}
 				#Warning - if you change this function change above too
-				def {{name.id}} : {{hash[:type_]}}
-					{% if hash[:default] %}
-						@{{name.id}}.nil? ? {{hash[:default]}}.not_nil! : @{{name.id}}.not_nil!
-					{% else %}
-						raise NilAssertionError.new {{name.stringify}} + "#" + {{name.id.stringify}} + " cannot be nil" if @{{name.id}}.nil?
-						@{{name.id}}.not_nil!
-					{% end %}
+				def {{name.id}} : {{hash[:type]}}
+					raise NilAssertionError.new {{name.stringify}} + "#" + {{name.id.stringify}} + " cannot be nil" if @{{name.id}}.nil?
+					@{{name.id}}.not_nil!
 				end
 			{% end %}
     {% end %}
@@ -104,7 +95,7 @@ module Mongo::ORM::Fields
     # keep a hash of the fields to be used for mapping
     def multi_embeds(membeds = [] of {name: String, type: String})
       {% for name, hash in SPECIAL_FIELDS %}
-      	membeds << {name: "{{name.id}}", type: "{{hash[:type_].id}}"}
+      	membeds << {name: "{{name.id}}", type: "{{hash[:type].id}}"}
       {% end %}
       return membeds
     end
@@ -135,14 +126,14 @@ module Mongo::ORM::Fields
       {% end %}
 			fields["_id"] = self._id
 			{% for name, hash in SPECIAL_FIELDS %}
-				{% if hash[:type_].id == String.id %}
-					fields["{{name.id}}"] = [] of String
-					if docs = self.{{name.id}}.as?(Array(String))
+				{% if hash[:type].id == String.id || hash[:type].id == BSON::ObjectId.id || hash[:type].id == Int32.id || hash[:type].id == Float32.id || hash[:type].id == Int64.id || hash[:type].id == Float64.id %}
+					fields["{{name.id}}"] = [] of {{hash[:type].id}}
+					if docs = self.{{name.id}}.as?(Array({{hash[:type].id}}))
 						fields["{{name.id}}"] = docs
 					end
 				{% else %}
 					adocs = [] of Mongo::ORM::EmbeddedDocument
-					if docs = self.{{name.id}}.as?(Array({{hash[:type_].id}}))
+					if docs = self.{{name.id}}.as?(Array({{hash[:type].id}}))
 						docs.each{|doc| adocs << doc.as(Mongo::ORM::EmbeddedDocument)}
 					end
 					fields["{{name.id}}"] = adocs
@@ -155,7 +146,7 @@ module Mongo::ORM::Fields
     def params
       parsed_params = [] of DB::Any
       {% for name, hash in FIELDS %}
-        {% if hash[:type_].id == Time.id %}
+        {% if hash[:type].id == Time.id %}
           parsed_params << {{name.id}}.try(&.to_s("%F %X"))
         {% else %}
           parsed_params << {{name.id}}
@@ -196,13 +187,13 @@ module Mongo::ORM::Fields
 
         {% for name, hash in FIELDS %}
           %field, %value = "{{name.id}}", {{name.id}}
-          {% if hash[:type_].id == Time.id %}
+          {% if hash[:type].id == Time.id %}
             json.field %field, %value.to_s
-          {% elsif hash[:type_].id == Slice.id %}
+          {% elsif hash[:type].id == Slice.id %}
             json.field %field, %value.id.try(&.to_s(""))
-          {% elsif hash[:type_].id == BSON::ObjectId.id %}
+          {% elsif hash[:type].id == BSON::ObjectId.id %}
             json.field %field, %value.to_s
-          {% elsif hash[:type_].id == Array(String).id %}
+          {% elsif hash[:type].id == Array(String).id %}
             if v = %value.as?(Array(String))
               json.field %field, v.join(",")
             end
@@ -225,13 +216,13 @@ module Mongo::ORM::Fields
 
           {% for name, hash in FIELDS %}
             %field, %value = "{{name.id}}", {{name.id}}
-            {% if hash[:type_].id == Time.id %}
+            {% if hash[:type].id == Time.id %}
               json.field %field, %value.to_s
-            {% elsif hash[:type_].id == Slice.id %}
+            {% elsif hash[:type].id == Slice.id %}
               json.field %field, %value.id.try(&.to_s(""))
-            {% elsif hash[:type_].id == BSON::ObjectId.id %}
+            {% elsif hash[:type].id == BSON::ObjectId.id %}
               json.field %field, %value.to_s
-            {% elsif hash[:type_].id == Array(String).id %}
+            {% elsif hash[:type].id == Array(String).id %}
               if v = %value.as?(Array(String))
                 json.field %field, v.join(",")
               end
@@ -262,7 +253,7 @@ module Mongo::ORM::Fields
       case name
         {% for _name, hash in SPECIAL_FIELDS %}
         when "{{_name.id}}"
-          {% if hash[:type_].id == String.id %}
+          {% if hash[:type].id == String.id %}
             @{{_name.id}} = value
           {% end %}
         {% end %}
@@ -324,25 +315,25 @@ module Mongo::ORM::Fields
         {% for _name, hash in FIELDS %}
         when "{{_name.id}}"
           return self.{{_name.id}} = nil if value.nil?
-          {% if hash[:type_].id == BSON::ObjectId.id %}
+          {% if hash[:type].id == BSON::ObjectId.id %}
             self.{{_name.id}} = BSON::ObjectId.new value.to_s
-          {% elsif hash[:type_].id == Int32.id %}
+          {% elsif hash[:type].id == Int32.id %}
             self.{{_name.id}} = value.is_a?(String) ? value.to_i32 : value.is_a?(Int64) ? value.to_s.to_i32 : value.as(Int32)
-          {% elsif hash[:type_].id == Int64.id %}
+          {% elsif hash[:type].id == Int64.id %}
             self.{{_name.id}} = value.is_a?(String) ? value.to_i64 : value.as(Int64)
-          {% elsif hash[:type_].id == Float32.id %}
+          {% elsif hash[:type].id == Float32.id %}
             self.{{_name.id}} = value.is_a?(String) ? value.to_f32 : value.is_a?(Float64) ? value.to_s.to_f32 : value.as(Float32)
-          {% elsif hash[:type_].id == Float64.id %}
+          {% elsif hash[:type].id == Float64.id %}
            self.@{{_name.id}} = value.is_a?(String) ? value.to_f64 : value.as(Float64)
-          {% elsif hash[:type_].id == Bool.id %}
+          {% elsif hash[:type].id == Bool.id %}
             self.{{_name.id}} = ["1", "yes", "true", true].includes?(value)
-          {% elsif hash[:type_].id == Time.id %}
+          {% elsif hash[:type].id == Time.id %}
             if value.is_a?(Time)
                self.{{_name.id}} = value.to_utc
              elsif value.to_s =~ TIME_FORMAT_REGEX
                self.{{_name.id}} = Time.parse_utc(value.to_s, "%F %X").to_utc
 						 end
-					{% elsif hash[:type_].id == String.id %}
+					{% elsif hash[:type].id == String.id %}
 						self.{{_name.id}} = value.to_s
           {% end %}
         {% end %}
