@@ -67,16 +67,21 @@ module Mongo::ORM::Fields
   macro __process_fields
     # Create the properties
 		{% for name, hash in FIELDS %}
-			{% if hash[:default] %}
+			{% unless hash[:default].nil? %}
+				Log.warn {  "Setting defaulg value for field {{name.id}} to #{{{hash[:default]}}.inspect}" }
 				@{{name.id}} : {{hash[:type]}}? = {{hash[:default]}}
 			{% end %}
 
 			def {{name.id}}=(new_val : {{hash[:type]}}?)
+				# don't allow non-nillable fields to be set to nil
+				{% unless hash[:nillable] %}
+					return false if new_val.nil?
+				{% end %}
+
 				unless @{{name.id}} == new_val
 					mark_dirty("{{name.id}}")
 					@{{name.id}} = new_val
 				end
-        # Log.debug { "Setting: {{name.id}} to #{@{{name.id}}.inspect}" }
       end
 
 			{% if hash[:nillable] %}
