@@ -1,7 +1,7 @@
 module Mongo::ORM::Collection
   macro included
     macro inherited
-      PRIMARY = {name: _id, type: BSON::ObjectId}
+      PRIMARY = {name: _id, type: BSON::ObjectId, display_name: "id"}
     end
   end
 

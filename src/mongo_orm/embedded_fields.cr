@@ -104,10 +104,7 @@ module Mongo::ORM::EmbeddedFields
       return [] of {name: String, type: String}
 		end
 
-		def set_string_array(name : String, value : Array(String))
-    end
-
-    def to_h
+		def to_h
       fields = {} of String => DB::Any
 
       {% for name, hash in FIELDS %}
@@ -124,13 +121,15 @@ module Mongo::ORM::EmbeddedFields
     end
 
     def to_json(json : JSON::Builder)
-      json.object do
-        {% for name, hash in FIELDS %}
-          %field, %value = "{{name.id}}", {{name.id}}
+			json.object do
+				{% for name, hash in FIELDS %}
+				  %field, %value = "{{name.id}}", {{name.id}}
           {% if hash[:type].id == Time.id %}
-            json.field %field, %value.try(&.to_s(%F %X))
+            json.field %field, %value.try(&.to_s("%F %X"))
           {% elsif hash[:type].id == Slice.id %}
-            json.field %field, %value.id.try(&.to_s(""))
+						json.field %field, %value.id.try(&.to_s(""))
+					{% elsif hash[:type].id == BSON::ObjectId.id %}
+						json.field %field, %value.try(&.to_s)
           {% else %}
             json.field %field, %value
           {% end %}
@@ -151,34 +150,47 @@ module Mongo::ORM::EmbeddedFields
     # Casts params and sets fields
     private def cast_to_field(name, value : Type)
       case name.to_s
-        {% for _name, hash in FIELDS %}
-        when "{{_name.id}}"
-          return @{{_name.id}} = nil if value.nil?
-          {% if hash[:type].id == BSON::ObjectId.id %}
-            @{{_name.id}} = BSON::ObjectId.new value.to_s
-          {% elsif hash[:type].id == Int32.id %}
-            @{{_name.id}} = value.is_a?(String) ? value.to_i32 : value.is_a?(Int64) ? value.to_s.to_i32 : value.as(Int32)
-          {% elsif hash[:type].id == Int64.id %}
-            @{{_name.id}} = value.is_a?(String) ? value.to_i64 : value.as(Int64)
-          {% elsif hash[:type].id == Float32.id %}
-            @{{_name.id}} = value.is_a?(String) ? value.to_f32 : value.is_a?(Float64) ? value.to_s.to_f32 : value.as(Float32)
-          {% elsif hash[:type].id == Float64.id %}
-            @{{_name.id}} = value.is_a?(String) ? value.to_f64 : value.as(Float64)
-          {% elsif hash[:type].id == Bool.id %}
-            @{{_name.id}} = ["1", "yes", "true", true].includes?(value)
-          {% elsif hash[:type].id == Time.id %}
-            if value.is_a?(Time)
-               @{{_name.id}} = value.to_utc
-             elsif value.to_s =~ TIME_FORMAT_REGEX
-               @{{_name.id}} = Time.parse(value.to_s, "%F %X").to_utc
-             end
-          {% else %}
-            @{{_name.id}} = value.to_s
-          {% end %}
-        {% end %}
-        else
-          Log.debug { "cast_to_field got nuthin for #{name.to_s}" }
-      end
+			{% for _name, hash in FIELDS %}
+			when "{{_name.id}}"
+				return @{{_name.id}} = nil if value.nil?
+				{% if hash[:type].id == BSON::ObjectId.id %}
+					@{{_name.id}} = BSON::ObjectId.new value.to_s
+				{% elsif hash[:type].id == Int32.id %}
+					@{{_name.id}} = value.is_a?(String) ? value.to_i32 : value.is_a?(Int64) ? value.to_s.to_i32 : value.as(Int32)
+				{% elsif hash[:type].id == Int64.id %}
+					@{{_name.id}} = value.is_a?(String) ? value.to_i64 : value.as(Int64)
+				{% elsif hash[:type].id == Float32.id %}
+					@{{_name.id}} = value.is_a?(String) ? value.to_f32 : value.is_a?(Float64) ? value.to_s.to_f32 : value.as(Float32)
+				{% elsif hash[:type].id == Float64.id %}
+					@{{_name.id}} = value.is_a?(String) ? value.to_f64 : value.as(Float64)
+				{% elsif hash[:type].id == Bool.id %}
+					@{{_name.id}} = ["1", "yes", "true", true].includes?(value)
+				{% elsif hash[:type].id == Time.id %}
+					if value.is_a?(Time)
+							@{{_name.id}} = value.to_utc
+						elsif value.to_s =~ TIME_FORMAT_REGEX
+							@{{_name.id}} = Time.parse(value.to_s, "%F %X").to_utc
+						end
+				{% else %}
+					@{{_name.id}} = value.to_s
+				{% end %}
+			{% end %}
+			else
+				Log.debug { "cast_to_field got nuthin for #{name.to_s}" }
+			end
+
+			case name.to_s
+			{% for _name, hash in SPECIAL_FIELDS %}
+			when "{{_name.id}}"
+				if array_val = value.as_a?(Array({{hash[:type].id}}))
+					@{{_name.id}} = array_val
+				else
+					@{{_name.id}} = [] of {{hash[:type].id}}
+				end
+			{% end %}
+			else
+				Log.debug { "cast_to_field got nuthin for #{name.to_s}" }
+			end
     end
   end
 end

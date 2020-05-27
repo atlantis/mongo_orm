@@ -113,10 +113,9 @@ module Mongo::ORM::Querying
         bson["_id"] = self._id  if self._id != nil && !only_dirty # id should never be dirty
         \{% for name, hash in FIELDS %}
           if !only_dirty || self.dirty?("\{{name}}")
-            if (!exclude_nil || !\{{name.id}}.nil?)
-							bson["\{{name}}"] = \{{name.id}}.as(Union(\{{hash[:type].id}} | Nil))
-						elsif only_nil && \{{name.id}}.nil?
-							bson["\{{name}}"] = nil
+            field_value = \{{name.id}}
+            if (!exclude_nil || !field_value.nil?) || (only_nil && field_value.nil?)
+							bson["\{{name}}"] = field_value.as(Union(\{{hash[:type].id}} | Nil))
             end
           end
         \{% end %}
@@ -143,8 +142,19 @@ module Mongo::ORM::Querying
 					end
         \{% end %}
         \{% if SETTINGS[:timestamps] %}
-          bson["created_at"] = created_at.as(Union(Time | Nil))
-          bson["updated_at"] = updated_at.as(Union(Time | Nil))
+          if !only_dirty || self.dirty?("created_at")
+            field_value = self.created_at
+            if (!exclude_nil || !field_value.nil?) || (only_nil && field_value.nil?)
+              bson["created_at"] = field_value
+            end
+          end
+
+          if !only_dirty || self.dirty?("created_at")
+            field_value = self.updated_at
+            if (!exclude_nil || !field_value.nil?) || (only_nil && field_value.nil?)
+              bson["updated_at"] = field_value
+            end
+          end
         \{% end %}
         bson
       end

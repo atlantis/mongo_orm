@@ -1,7 +1,8 @@
 require "json"
 
 module Mongo::ORM::Fields
-  alias Type = JSON::Any | DB::Any | Mongo::ORM::EmbeddedDocument | Array(Mongo::ORM::EmbeddedDocument) | Array(String) | Array(BSON::ObjectId)
+	alias SingleType = JSON::Any | DB::Any | Mongo::ORM::EmbeddedDocument
+  alias Type = SingleType | Array(Mongo::ORM::EmbeddedDocument) | Array(String) | Array(BSON::ObjectId)
   TIME_FORMAT_REGEX = /\d{4,}-\d{2,}-\d{2,}\s\d{2,}:\d{2,}:\d{2,}/
 
   macro included
@@ -177,7 +178,7 @@ module Mongo::ORM::Fields
     def to_h
       fields = {} of String => DB::Any
 
-      fields["{{PRIMARY[:name]}}"] = {{PRIMARY[:name]}}
+      fields[{{PRIMARY[:display_name]}}] = {{PRIMARY[:name]}}
 
       {% for name, hash in FIELDS %}
         {% if hash[:_type].id == Time.id %}
@@ -198,7 +199,7 @@ module Mongo::ORM::Fields
 
     def to_json(json : JSON::Builder)
       json.object do
-        json.field "{{PRIMARY[:name]}}", {{PRIMARY[:name]}} ? {{PRIMARY[:name]}}.to_s : nil
+        json.field {{PRIMARY[:display_name]}}, {{PRIMARY[:name]}} ? {{PRIMARY[:name]}}.to_s : nil
 
         {% for name, hash in FIELDS %}
           %field, %value = "{{name.id}}", {{name.id}}
@@ -227,7 +228,7 @@ module Mongo::ORM::Fields
     def to_json
       JSON.build do |json|
         json.object do
-          json.field "{{PRIMARY[:name]}}", {{PRIMARY[:name]}} ? {{PRIMARY[:name]}}.to_s : nil
+          json.field {{PRIMARY[:display_name]}}, {{PRIMARY[:name]}} ? {{PRIMARY[:name]}}.to_s : nil
 
           {% for name, hash in FIELDS %}
             %field, %value = "{{name.id}}", {{name.id}}
@@ -262,19 +263,6 @@ module Mongo::ORM::Fields
 
     def set_attributes(**args)
       set_attributes(args.to_h)
-    end
-
-    def set_string_array(name : String, value : Array(String))
-      case name
-        {% for _name, hash in SPECIAL_FIELDS %}
-        when "{{_name.id}}"
-          {% if hash[:type].id == String.id %}
-            @{{_name.id}} = value
-          {% end %}
-        {% end %}
-        else
-          puts "set_string_array field not found: #{name}"
-      end
     end
 
     def mark_dirty(field_name : String)
@@ -326,35 +314,76 @@ module Mongo::ORM::Fields
 
     # Casts params and sets fields - make sure to use the setter function rather than direct instance variable
 		private def cast_to_field(name, value : Type)
-			case name.to_s
-        {% for _name, hash in FIELDS %}
-        when "{{_name.id}}"
-          return self.{{_name.id}} = nil if value.nil?
-          {% if hash[:type].id == BSON::ObjectId.id %}
-            self.{{_name.id}} = BSON::ObjectId.new value.to_s
-          {% elsif hash[:type].id == Int32.id %}
-            self.{{_name.id}} = value.is_a?(String) ? value.to_i32 : value.is_a?(Int64) ? value.to_s.to_i32 : value.as(Int32)
-          {% elsif hash[:type].id == Int64.id %}
-            self.{{_name.id}} = value.is_a?(String) ? value.to_i64 : value.as(Int64)
-          {% elsif hash[:type].id == Float32.id %}
-            self.{{_name.id}} = value.is_a?(String) ? value.to_f32 : value.is_a?(Float64) ? value.to_s.to_f32 : value.as(Float32)
-          {% elsif hash[:type].id == Float64.id %}
-           self.@{{_name.id}} = value.is_a?(String) ? value.to_f64 : value.as(Float64)
-          {% elsif hash[:type].id == Bool.id %}
-            self.{{_name.id}} = ["1", "yes", "true", true].includes?(value)
-          {% elsif hash[:type].id == Time.id %}
-            if value.is_a?(Time)
-               self.{{_name.id}} = value.to_utc
-             elsif value.to_s =~ TIME_FORMAT_REGEX
-               self.{{_name.id}} = Time.parse_utc(value.to_s, "%F %X").to_utc
-						 end
-					{% elsif hash[:type].id == String.id %}
-						self.{{_name.id}} = value.to_s
-          {% end %}
-        {% end %}
-        else
-          Log.debug { "cast_to_field got nuthin for #{name.to_s}" }
-      end
-    end
+			if value.is_a?(SingleType)
+				case name.to_s
+					{% for _name, hash in FIELDS %}
+					when "{{_name.id}}"
+						if v = self.cast_single_value(value, "{{hash[:type].id}}").as?({{hash[:type].id}})
+							self.{{_name.id}} = v
+						else
+							self.{{_name.id}} = nil
+						end
+					{% end %}
+				else
+					Log.debug { "cast_to_field got nuthin for #{name.to_s}" }
+				end
+			else
+				case name.to_s
+					{% for _name, hash in SPECIAL_FIELDS %}
+					when "{{_name.id}}"
+						self.{{_name.id}} = [] of {{hash[:type].id}}
+						if array_val = value.as?(Array)
+							array_val.each do |each_val|
+								if v = self.cast_single_value(each_val, "{{hash[:type].id}}").as?({{hash[:type].id}})
+									self.{{_name.id}} << v
+								end
+							end
+						end
+					{% end %}
+				else
+					Log.debug { "cast_to_field got nuthin for #{name.to_s}" }
+				end
+			end
+		end
+
+		private def cast_single_value(value : SingleType, klass : String) : Type
+			return nil if value.nil?
+			case klass
+			when "BSON::ObjectId"
+				value.is_a?(BSON::ObjectId) ? value : BSON::ObjectId.new(value.to_s)
+			when "Int32"
+				if value.is_a?(String)
+					value.to_i32
+				elsif value.is_a?(Int64)
+					value.to_s.to_i32
+				else
+					value.as?(Int32)
+				end
+			when "Int64"
+				value.is_a?(String) ? value.to_i64 : value.as?(Int64)
+			when "Float32"
+				if value.is_a?(String)
+					value.to_f32
+				elsif value.is_a?(Float64)
+					value.to_s.to_f32
+				else
+					value.as?(Float32)
+				end
+			when "Float64"
+				value.is_a?(String) ? value.to_f64 : value.as?(Float64)
+			when "Bool"
+				["1", "yes", "true", true].includes?(value)
+			when "Time"
+				if value.is_a?(Time)
+					value.to_utc
+				elsif value.to_s =~ TIME_FORMAT_REGEX
+					Time.parse_utc(value.to_s, "%F %X").to_utc
+				end
+			when "String"
+				value.to_s
+			else
+				nil
+			end
+		end
   end
 end

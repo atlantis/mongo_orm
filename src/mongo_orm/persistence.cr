@@ -8,46 +8,50 @@ module Mongo::ORM::Persistence
     # will call the update method, otherwise it will call the create method.
     # This will update the timestamps apropriately.
     def save
-      begin
-        fields_to_update = BSON.new
-				__run_before_save
-				if _id
-          __run_before_update
-          @updated_at = Time.utc
+			begin
+				if self.valid?
+					fields_to_update = BSON.new
+					__run_before_save
+					if _id
+						__run_before_update
+						@updated_at = Time.utc
 
-          if model_id = self.id
-						fields_to_update = self.dirty_fields_to_bson
-						fields_to_unset = self.nil_dirty_fields_to_bson
-						Log.debug { "save() updating dirty fields: #{fields_to_update.inspect} unseting dirty fields: #{fields_to_unset.inspect}"}
-						bson = BSON.new
-						bson["$set"] = fields_to_update unless fields_to_update.empty?
-						bson["$unset"] = fields_to_unset unless fields_to_unset.empty?
-						unless fields_to_update.empty? && fields_to_unset.empty?
-							@@collection.update({"_id" => model_id}, bson)
+						if model_id = self.id
+							fields_to_update = self.dirty_fields_to_bson
+							fields_to_unset = self.nil_dirty_fields_to_bson
+							Log.debug { "save() updating dirty fields: #{fields_to_update.inspect} unseting dirty fields: #{fields_to_unset.inspect}"}
+							bson = BSON.new
+							bson["$set"] = fields_to_update unless fields_to_update.empty?
+							bson["$unset"] = fields_to_unset unless fields_to_unset.empty?
+							unless fields_to_update.empty? && fields_to_unset.empty?
+								@@collection.update({"_id" => model_id}, bson)
+							else
+								Log.debug { "save() skipping operation cause no dirty fields!" }
+							end
 						else
-							Log.debug { "save() skipping operation cause no dirty fields!" }
+							@errors << Mongo::ORM::Error.new(:base, "Must have an ID to update a model")
 						end
-          else
-            @errors << Mongo::ORM::Error.new(:base, "Must have an ID to update a model")
+						__run_after_update
+					else
+						__run_before_create
+						if self.id.nil?
+							@created_at = Time.utc
+							@updated_at = Time.utc
+							self._id = BSON::ObjectId.new
+							fields_to_update = self.to_bson(false, true)
+							Log.debug { "save() creating fields: #{fields_to_update.inspect}"}
+							@@collection.save(fields_to_update) unless fields_to_update.empty?
+							__run_after_create
+						else
+							@errors << Mongo::ORM::Error.new(:base, "Tried to create a model that already had an id")
+						end
 					end
-					__run_after_update
-        else
-          __run_before_create
-          if self.id.nil?
-            @created_at = Time.utc
-            @updated_at = Time.utc
-            self._id = BSON::ObjectId.new
-            fields_to_update = self.to_bson(false, true)
-            Log.debug { "save() creating fields: #{fields_to_update.inspect}"}
-            @@collection.save(fields_to_update) unless fields_to_update.empty?
-            __run_after_create
-          else
-            @errors << Mongo::ORM::Error.new(:base, "Tried to create a model that already had an id")
-          end
-        end
-				__run_after_save
-				self.clear_dirty
-        return true
+					__run_after_save
+					self.clear_dirty
+					return true
+				else
+					return false
+				end
       rescue ex
         if message = ex.message
           Log.warn { "Save Exception: #{message}... fields to update: #{fields_to_update.inspect}" }
