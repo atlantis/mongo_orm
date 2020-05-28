@@ -318,11 +318,7 @@ module Mongo::ORM::Fields
 				case name.to_s
 					{% for _name, hash in FIELDS %}
 					when "{{_name.id}}"
-						if v = self.cast_single_value(value, "{{hash[:type].id}}").as?({{hash[:type].id}})
-							self.{{_name.id}} = v
-						else
-							self.{{_name.id}} = nil
-						end
+						self.{{_name.id}} = self.cast_single_value(value, "{{hash[:type].id}}").as?({{hash[:type].id}})
 					{% end %}
 				else
 					Log.debug { "cast_to_field got nuthin for #{name.to_s}" }
@@ -334,9 +330,8 @@ module Mongo::ORM::Fields
 						self.{{_name.id}} = [] of {{hash[:type].id}}
 						if array_val = value.as?(Array)
 							array_val.each do |each_val|
-								if v = self.cast_single_value(each_val, "{{hash[:type].id}}").as?({{hash[:type].id}})
-									self.{{_name.id}} << v
-								end
+								v = self.cast_single_value(each_val, "{{hash[:type].id}}").as?({{hash[:type].id}})
+								self.{{_name.id}} << v unless v.nil?
 							end
 						end
 					{% end %}
