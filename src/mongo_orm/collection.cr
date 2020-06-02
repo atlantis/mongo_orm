@@ -6,6 +6,7 @@ module Mongo::ORM::Collection
   end
 
   @@adapter = Mongo::ORM::Adapter.new
+
   def self.adapter
     @@adapter
   end
@@ -63,5 +64,11 @@ module Mongo::ORM::Collection
 
     # Create the primary key
     property {{primary_name}} : Union({{primary_type.id}} | Nil)
+
+    include Comparable({{@type}})
+
+    def <=>(other : {{@type}})
+      self.{{primary_name}}.to_s <=> other.{{primary_name}}.to_s
+    end
   end
 end

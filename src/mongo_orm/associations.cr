@@ -1,18 +1,18 @@
 module Mongo::ORM::Associations
   # define getter and setter for parent relationship
   macro belongs_to(model_name, **options)
-		{%  class_name = options[:class_name] %}
-		{%  nillable = options[:nillable] || false %}
-    field {{class_name ? class_name.id.underscore.gsub(/::/,"_") : model_name.id}}_id : BSON::ObjectId? = nil
+		{% class_name = options[:class_name] %}
+		{% nillable = options[:nillable] || false %}
+    field {{model_name.id}}_id : BSON::ObjectId? = nil
 
     # retrieve the parent relationship
     def {{model_name.id}}!
-      {{class_name ? class_name.id : model_name.id.camelcase}}.find({{class_name ? class_name.id.underscore.gsub(/::/,"_") : model_name.id}}_id).not_nil!
+      {{class_name ? class_name.id : model_name.id.camelcase}}.find({{class_name ? class_name.id.underscore.gsub(/::/, "_") : model_name.id}}_id).not_nil!
 		end
 
 		def {{model_name.id}}
 			{% if options[:nillable] %}
-				if parent = {{class_name ? class_name.id : model_name.id.camelcase}}.find {{class_name ? class_name.id.underscore.gsub(/::/,"_") : model_name.id}}_id
+				if parent = {{class_name ? class_name.id : model_name.id.camelcase}}.find {{model_name.id}}_id
 					parent
 				else
 					nil
@@ -24,12 +24,12 @@ module Mongo::ORM::Associations
 
     # set the parent relationship
     def {{model_name.id}}=(parent)
-      self.{{class_name ? class_name.id.underscore.gsub(/::/,"_") : model_name.id}}_id = parent.try &._id
+      self.{{model_name.id}}_id = parent.try &._id
     end
   end
 
   macro has_many(children_collection, **options)
-    {%  class_name = options[:class_name] %}
+    {% class_name = options[:class_name] %}
     def {{children_collection.id}}
       {% children_class = class_name ? class_name.id : children_collection.id[0...-1].camelcase %}
       return [] of {{children_class}} unless self._id
