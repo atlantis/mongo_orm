@@ -45,6 +45,7 @@ module Mongo::ORM::Fields
 			{% children_class = children_collection.type.id %}
 			{% collection_name = children_collection.var.id %}
 		{% end %}
+    
     @{{collection_name}} = [] of {{children_class}}
     def {{collection_name}}
       @{{collection_name}}

@@ -27,19 +27,27 @@ module Mongo::ORM::EmbeddedFields
 	end
 
 	macro embeds_many(children_collection, class_name = nil)
-    {% children_class = class_name ? class_name.id : children_collection.id[0...-1].camelcase %}
-    @{{children_collection.id}} = [] of {{children_class}}
-    def {{children_collection.id}}
-      @{{children_collection.id}}
+    {% if children_collection.is_a?(SymbolLiteral) %}
+      {% children_class = children_collection.id[0...-1].camelcase %}
+      {% collection_name = children_collection.id %}
+    {% else %}
+      {% children_class = children_collection.type.id %}
+      {% collection_name = children_collection.var.id %}
+    {% end %}
+
+    
+    @{{collection_name}} = [] of {{children_class}}
+    def {{collection_name}}
+      @{{collection_name}}
     end
 
-		def {{children_collection.id}}=(value : Array({{children_class}}))
-			unless value == @{{children_collection.id}}
-				@{{children_collection.id}} = value
-				#mark_dirty("{{children_collection.id}}")
-			end
+    def {{collection_name}}=(value : Array({{children_class}}))
+      unless value == @{{collection_name}}
+        @{{collection_name}} = value
+      end
     end
-    {% SPECIAL_FIELDS[children_collection.id] = {type: children_class} %}
+
+    {% SPECIAL_FIELDS[collection_name] = {type: children_class} %}
   end
 
   # include created_at and updated_at that will automatically be updated
