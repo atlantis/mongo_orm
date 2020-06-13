@@ -1,7 +1,7 @@
 require "json"
 
 module Mongo::ORM::Fields
-	alias SingleType = JSON::Any | DB::Any | Mongo::ORM::EmbeddedDocument
+  alias SingleType = JSON::Any | DB::Any | Mongo::ORM::EmbeddedDocument
   alias Type = SingleType | Array(Mongo::ORM::EmbeddedDocument) | Array(String) | Array(BSON::ObjectId)
   TIME_FORMAT_REGEX = /\d{4,}-\d{2,}-\d{2,}\s\d{2,}:\d{2,}:\d{2,}/
 
@@ -17,7 +17,7 @@ module Mongo::ORM::Fields
       getter? dirty_field_names = [] of String
 
       @[JSON::Field(ignore: true)]
-      getter? destroyed = false
+      property? destroyed = false
     end
   end
 
@@ -37,7 +37,7 @@ module Mongo::ORM::Fields
     #raise "can only embed classes inheriting from Mongo::ORM::EmbeddedDocument" unless {{decl.type}}.new.is_a?(Mongo::ORM::EmbeddedDocument)
   end
 
-	macro embeds_many(children_collection)
+  macro embeds_many(children_collection)
 		{% if children_collection.is_a?(SymbolLiteral) %}
 			{% children_class = children_collection.id[0...-1].camelcase %}
 			{% collection_name = children_collection.id %}
@@ -45,7 +45,7 @@ module Mongo::ORM::Fields
 			{% children_class = children_collection.type.id %}
 			{% collection_name = children_collection.var.id %}
 		{% end %}
-    
+
     @{{collection_name}} = [] of {{children_class}}
     def {{collection_name}}
       @{{collection_name}}
@@ -334,6 +334,7 @@ module Mongo::ORM::Fields
 								v = self.cast_single_value(each_val, "{{hash[:type].id}}").as?({{hash[:type].id}})
 								self.{{_name.id}} << v unless v.nil?
 							end
+              self.mark_dirty {{_name.id.stringify}}
 						end
 					{% end %}
 				else
