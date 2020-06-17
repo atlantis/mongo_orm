@@ -5,53 +5,75 @@ class Object
 end
 
 class String
-	def self.from_bson(val)
-	  val.as?(self)
-	end
+  def self.from_bson(val)
+    val.as?(self)
+  end
 
-	def to_bson
+  def to_bson
     self
-	end
+  end
 end
 
 struct Float32
-	def self.from_bson(val)
-		val.as?(self)
-	end
+  def self.from_bson(val)
+    val.as?(self)
+  end
 
-	def to_bson
-		self
-	end
+  def to_bson
+    self
+  end
 end
 
 struct Float64
-	def self.from_bson(val)
-		val.as?(self)
-	end
+  def self.from_bson(val)
+    val.as?(self)
+  end
 
-	def to_bson
-		self
-	end
+  def to_bson
+    self
+  end
 end
 
 struct Int32
-	def self.from_bson(val)
-		val.as?(self)
-	end
+  def self.from_bson(val)
+    val.as?(self)
+  end
 
-	def to_bson
-		self
-	end
+  def to_bson
+    self
+  end
 end
 
 struct Int64
-	def self.from_bson(val)
-		val.as?(self)
-	end
+  def self.from_bson(val)
+    val.as?(self)
+  end
 
-	def to_bson
-		self
-	end
+  def to_bson
+    self
+  end
+end
+
+class BSON
+  struct ObjectId
+    def to_json(json : JSON::Builder)
+      self.to_s
+    end
+
+    def to_s
+      buf = StaticArray(UInt8, 25).new(0_u8)
+      LibBSON.bson_oid_to_string(@handle, buf)
+      String.new(buf.to_slice).strip("\u0000")
+    end
+
+    def self.from_bson(val)
+      val.as?(self)
+    end
+
+    def to_bson
+      self
+    end
+  end
 end
 
 module Mongo::ORM::Querying
@@ -66,29 +88,29 @@ module Mongo::ORM::Querying
         fields = {} of String => Bool
 
         \{% for name, hash in FIELDS %}
-					fields["\{{name.id}}"] = true
-					if bson.has_key?("\{{name}}")
-						model.\{{name.id}} = if \{{hash[:type].id}}.is_a? Mongo::ORM::EmbeddedDocument.class
-							if embedded = bson["\{{name}}"]?
-								\{{hash[:type].id}}.from_bson(embedded)
-							end
-						else bson.has_key?("\{{name}}")
-							bson["\{{name}}"].as(Union(\{{hash[:type].id}} | Nil))
-						end
-					end
+          fields["\{{name.id}}"] = true
+          if bson.has_key?("\{{name}}")
+            model.\{{name.id}} = if \{{hash[:type].id}}.is_a? Mongo::ORM::EmbeddedDocument.class
+              if embedded = bson["\{{name}}"]?
+                \{{hash[:type].id}}.from_bson(embedded)
+              end
+            else bson.has_key?("\{{name}}")
+              bson["\{{name}}"].as(Union(\{{hash[:type].id}} | Nil))
+            end
+          end
           \{% if hash[:type].id == Time %}
             model.\{{name.id}} = model.\{{name.id}}.not_nil!.to_utc if model.\{{name.id}}
           \{% end %}
         \{% end %}
 
-				\{% for name, hash in SPECIAL_FIELDS %}
-					fields["\{{name.id}}"] = true
-					model.\{{name.id}} = [] of \{{hash[:type].id}}
-					k = "\{{name}}"
-					if bson.has_key?("\{{name}}")
+        \{% for name, hash in SPECIAL_FIELDS %}
+          fields["\{{name.id}}"] = true
+          model.\{{name.id}} = [] of \{{hash[:type].id}}
+          k = "\{{name}}"
+          if bson.has_key?("\{{name}}")
             bson["\{{name}}"].not_nil!.as(BSON).each do |item|
-							loaded = \{{hash[:type].id}}.from_bson(item.value)
-							model.\{{name.id}} << loaded unless loaded.nil?
+              loaded = \{{hash[:type].id}}.from_bson(item.value)
+              model.\{{name.id}} << loaded unless loaded.nil?
             end
           elsif !bson.has_key?("\{{name}}") && \{{ hash }}.has_key?(:default)
             \{{hash[:default]}}
@@ -103,8 +125,8 @@ module Mongo::ORM::Querying
           model.updated_at = model.updated_at.not_nil!.to_utc if model.updated_at
         \{% end %}
 
-				model.clear_dirty
-				model.cache_original_values
+        model.clear_dirty
+        model.cache_original_values
         model
       end
 
@@ -115,31 +137,31 @@ module Mongo::ORM::Querying
           if !only_dirty || self.dirty?("\{{name}}")
             field_value = \{{name.id}}
             if (!exclude_nil || !field_value.nil?) || (only_nil && field_value.nil?)
-							bson["\{{name}}"] = field_value.as(Union(\{{hash[:type].id}} | Nil))
+              bson["\{{name}}"] = field_value.as(Union(\{{hash[:type].id}} | Nil))
             end
           end
         \{% end %}
-				\{% for name, hash in SPECIAL_FIELDS %}
-					if !only_dirty || self.dirty?("\{{name}}")
-						if \{{hash[:type].id}} == String
-							if as_a = self.\{{name.id}}.as?(Array(String))
-								bson.append_array(\{{name.stringify}}) do |array_appender|
-									as_a.each{ |strval| array_appender << strval }
-								end
-							end
-						else
-							count_appends = 0
-							if self.\{{name.id}} != nil || !exclude_nil
-								bson.append_array(\{{name.stringify}}) do |array_appender|
-									if self.\{{name.id}} != nil
-										self.\{{name}}.each do |item|
-											array_appender << item.to_bson if item
-										end
-									end
-								end
-							end
-						end
-					end
+        \{% for name, hash in SPECIAL_FIELDS %}
+          if !only_dirty || self.dirty?("\{{name}}")
+            if \{{hash[:type].id}} == String
+              if as_a = self.\{{name.id}}.as?(Array(String))
+                bson.append_array(\{{name.stringify}}) do |array_appender|
+                  as_a.each{ |strval| array_appender << strval }
+                end
+              end
+            else
+              count_appends = 0
+              if self.\{{name.id}} != nil || !exclude_nil
+                bson.append_array(\{{name.stringify}}) do |array_appender|
+                  if self.\{{name.id}} != nil
+                    self.\{{name}}.each do |item|
+                      array_appender << item.to_bson if item
+                    end
+                  end
+                end
+              end
+            end
+          end
         \{% end %}
         \{% if SETTINGS[:timestamps] %}
           if !only_dirty || self.dirty?("created_at")
@@ -168,10 +190,10 @@ module Mongo::ORM::Querying
     end
   end
 
-	def all(query = BSON.new, skip = 0, limit = 0, batch_size = 0, flags = LibMongoC::QueryFlags::NONE, prefs = nil)
-		{% if @type.class.has_method? "add_find_conditions" %}
-			self.add_find_conditions(query)
-		{% end %}
+  def all(query = BSON.new, skip = 0, limit = 0, batch_size = 0, flags = LibMongoC::QueryFlags::NONE, prefs = nil)
+    {% if @type.class.has_method? "add_find_conditions" %}
+      self.add_find_conditions(query)
+    {% end %}
 
     rows = [] of self
     collection.find(query, BSON.new, flags, skip, limit, batch_size, prefs).each do |doc|
@@ -180,18 +202,18 @@ module Mongo::ORM::Querying
     rows
   end
 
-	def all_batches(query = BSON.new, batch_size = 100)
-		{% if @type.class.has_method? "add_find_conditions" %}
-			self.add_find_conditions(query)
-		{% end %}
+  def all_batches(query = BSON.new, batch_size = 100)
+    {% if @type.class.has_method? "add_find_conditions" %}
+      self.add_find_conditions(query)
+    {% end %}
 
-		collection.find(query, BSON.new, LibMongoC::QueryFlags::NONE, 0, 0, batch_size, nil).each do |doc|
+    collection.find(query, BSON.new, LibMongoC::QueryFlags::NONE, 0, 0, batch_size, nil).each do |doc|
       yield from_bson(doc)
     end
   end
 
-	def first(query = BSON.new)
-		all(query, 0, 1).first?
+  def first(query = BSON.new)
+    all(query, 0, 1).first?
   end
 
   def find(value, query = BSON.new)
@@ -204,22 +226,22 @@ module Mongo::ORM::Querying
   # find_by using symbol for field name.
   def find_by(field : Symbol, value)
     field = :_id if field == :id
-    find_by(field.to_s, value)  # find_by using symbol for field name.
+    find_by(field.to_s, value) # find_by using symbol for field name.
   end
 
   # find_by returns the first row found where the field maches the value
-	def find_by(field : String, value, query = BSON.new)
-		query[field] = value
+  def find_by(field : String, value, query = BSON.new)
+    query[field] = value
 
-		{% if @type.class.has_method? "add_find_conditions" %}
-			self.add_find_conditions(query)
-		{% end %}
+    {% if @type.class.has_method? "add_find_conditions" %}
+      self.add_find_conditions(query)
+    {% end %}
 
-		collection.find(query, BSON.new, LibMongoC::QueryFlags::NONE, 0, 1) do |doc|
+    collection.find(query, BSON.new, LibMongoC::QueryFlags::NONE, 0, 1) do |doc|
       return from_bson(doc)
     end
 
-		nil
+    nil
   end
 
   def count(query = BSON.new, flags = LibMongoC::QueryFlags::NONE)
