@@ -4,3 +4,5 @@
 /.shards/
 /mongo_orm
 /mongo_orm.dwarf
+.DS_Store
+src/.DS_Store

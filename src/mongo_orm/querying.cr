@@ -118,13 +118,6 @@ module Mongo::ORM::Querying
           end
         \{% end %}
 
-        \{% if SETTINGS[:timestamps] %}
-          model.created_at = bson["created_at"].as(Union(Time | Nil)) if bson["created_at"]?
-          model.updated_at = bson["updated_at"].as(Union(Time | Nil)) if bson["updated_at"]?
-          model.created_at = model.created_at.not_nil!.to_utc if model.created_at
-          model.updated_at = model.updated_at.not_nil!.to_utc if model.updated_at
-        \{% end %}
-
         model.clear_dirty
         model.cache_original_values
         model
@@ -160,21 +153,6 @@ module Mongo::ORM::Querying
                   end
                 end
               end
-            end
-          end
-        \{% end %}
-        \{% if SETTINGS[:timestamps] %}
-          if !only_dirty || self.dirty?("created_at")
-            field_value = self.created_at
-            if (!exclude_nil || !field_value.nil?) || (only_nil && field_value.nil?)
-              bson["created_at"] = field_value
-            end
-          end
-
-          if !only_dirty || self.dirty?("created_at")
-            field_value = self.updated_at
-            if (!exclude_nil || !field_value.nil?) || (only_nil && field_value.nil?)
-              bson["updated_at"] = field_value
             end
           end
         \{% end %}

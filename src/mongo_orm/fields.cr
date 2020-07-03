@@ -67,10 +67,14 @@ module Mongo::ORM::Fields
   end
 
   macro __process_fields
+    {% if SETTINGS[:timestamps] %}
+      {% FIELDS[:created_at.id] = {type: Time, nillable: true} %}
+      {% FIELDS[:updated_at.id] = {type: Time, nillable: true} %}
+    {% end %}
+
     # Create the properties
 		{% for name, hash in FIELDS %}
 			{% unless hash[:default].nil? %}
-				Log.warn {  "Setting defaulg value for field {{name.id}} to #{{{hash[:default]}}.inspect}" }
 				@{{name.id}} : {{hash[:type]}}? = {{hash[:default]}}
 			{% end %}
 
@@ -104,10 +108,6 @@ module Mongo::ORM::Fields
 				end
 			{% end %}
     {% end %}
-    {% if SETTINGS[:timestamps] %}
-      property created_at : Time?
-      property updated_at : Time?
-    {% end %}
 
     # keep a hash of the fields to be used for mapping
     def multi_embeds(membeds = [] of {name: String, type: String})
@@ -122,11 +122,7 @@ module Mongo::ORM::Fields
       {% for name, hash in FIELDS %}
         fields << "{{name.id}}"
       {% end %}
-      {% if SETTINGS[:timestamps] %}
-        fields << "created_at"
-        fields << "updated_at"
-			{% end %}
-			{% for name, hash in SPECIAL_FIELDS %}
+      {% for name, hash in SPECIAL_FIELDS %}
 				fields << "{{name.id}}"
 			{% end %}
       return fields
@@ -137,11 +133,7 @@ module Mongo::ORM::Fields
       {% for name, hash in FIELDS %}
         fields["{{name.id}}"] = @{{name.id}}
       {% end %}
-      {% if SETTINGS[:timestamps] %}
-        fields["created_at"] = self.created_at
-        fields["updated_at"] = self.updated_at
-      {% end %}
-			fields["_id"] = self._id
+      fields["_id"] = self._id
 			{% for name, hash in SPECIAL_FIELDS %}
 				{% if hash[:type].id == String.id || hash[:type].id == BSON::ObjectId.id || hash[:type].id == Int32.id || hash[:type].id == Float32.id || hash[:type].id == Int64.id || hash[:type].id == Float64.id %}
 					fields["{{name.id}}"] = [] of {{hash[:type].id}}
@@ -169,10 +161,6 @@ module Mongo::ORM::Fields
           parsed_params << {{name.id}}
         {% end %}
       {% end %}
-      {% if SETTINGS[:timestamps] %}
-        parsed_params << created_at.not_nil!.to_s("%F %X")
-        parsed_params << updated_at.not_nil!.to_s("%F %X")
-      {% end %}
       return parsed_params
     end
 
@@ -189,10 +177,6 @@ module Mongo::ORM::Fields
         {% else %}
           fields["{{name}}"] = {{name.id}}
         {% end %}
-      {% end %}
-      {% if SETTINGS[:timestamps] %}
-        fields["created_at"] = created_at.try(&.to_s("%F %X"))
-        fields["updated_at"] = updated_at.try(&.to_s("%F %X"))
       {% end %}
 
       return fields
@@ -218,11 +202,6 @@ module Mongo::ORM::Fields
             json.field %field, %value
           {% end %}
         {% end %}
-
-        {% if SETTINGS[:timestamps] %}
-          json.field "created_at", created_at.to_s
-          json.field "updated_at", updated_at.to_s
-        {% end %}
       end
     end
 
@@ -246,11 +225,6 @@ module Mongo::ORM::Fields
             {% else %}
               json.field %field, %value
             {% end %}
-          {% end %}
-
-          {% if SETTINGS[:timestamps] %}
-            json.field "created_at", created_at.to_s
-            json.field "updated_at", updated_at.to_s
           {% end %}
         end
       end
