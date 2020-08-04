@@ -2,7 +2,7 @@ require "json"
 
 module Mongo::ORM::Fields
   alias SingleType = JSON::Any | DB::Any | Mongo::ORM::EmbeddedDocument
-  alias Type = SingleType | Array(Mongo::ORM::EmbeddedDocument) | Array(String) | Array(BSON::ObjectId)
+  alias Type = SingleType | Array(Mongo::ORM::EmbeddedDocument) | Array(String) | Array(BSON::ObjectId) | Array(Float32) | Array(Float64)
   TIME_FORMAT_REGEX = /\d{4,}-\d{2,}-\d{2,}\s\d{2,}:\d{2,}:\d{2,}/
 
   macro included

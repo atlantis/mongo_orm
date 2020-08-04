@@ -34,7 +34,6 @@ module Mongo::ORM::EmbeddedBSON
         \{% for name, hash in SPECIAL_FIELDS %}
           fields["\{{name.id}}"] = true
           model.\{{name.id}} = [] of \{{hash[:type].id}}
-
           if bson.has_key?("\{{name}}")
             bson["\{{name}}"].not_nil!.as(BSON).each do |item|
               loaded = \{{hash[:type].id}}.from_bson(item.value)

@@ -1,7 +1,7 @@
 require "json"
 
 module Mongo::ORM::EmbeddedFields
-  alias Type = JSON::Any | DB::Any | Array(String) | Array(BSON::ObjectId) | Array(Int32) | Array(Float32)
+  alias Type = JSON::Any | DB::Any | Array(String) | Array(BSON::ObjectId) | Array(Int32) | Array(Float32) | Array(Float64)
   TIME_FORMAT_REGEX = /\d{4,}-\d{2,}-\d{2,}\s\d{2,}:\d{2,}:\d{2,}/
 
   macro included
@@ -26,7 +26,7 @@ module Mongo::ORM::EmbeddedFields
     #raise "can only embed classes inheriting from Mongo::ORM::EmbeddedDocument" unless {{decl.type}}.new.is_a?(Mongo::ORM::EmbeddedDocument)
 	end
 
-	macro embeds_many(children_collection, class_name = nil)
+  macro embeds_many(children_collection, class_name = nil)
     {% if children_collection.is_a?(SymbolLiteral) %}
       {% children_class = children_collection.id[0...-1].camelcase %}
       {% collection_name = children_collection.id %}
@@ -35,7 +35,7 @@ module Mongo::ORM::EmbeddedFields
       {% collection_name = children_collection.var.id %}
     {% end %}
 
-    
+
     @{{collection_name}} = [] of {{children_class}}
     def {{collection_name}}
       @{{collection_name}}
