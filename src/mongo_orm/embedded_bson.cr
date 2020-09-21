@@ -29,18 +29,18 @@ module Mongo::ORM::EmbeddedBSON
           \{% if hash[:type].id == Time %}
             model.\{{name.id}} = model.\{{name.id}}.not_nil!.to_utc if model.\{{name.id}}
           \{% end %}
-        \{% end %}
+				\{% end %}
 
-        \{% for name, hash in SPECIAL_FIELDS %}
-          fields["\{{name.id}}"] = true
-          model.\{{name.id}} = [] of \{{hash[:type].id}}
-          if bson.has_key?("\{{name}}")
-            bson["\{{name}}"].not_nil!.as(BSON).each do |item|
-              loaded = \{{hash[:type].id}}.from_bson(item.value)
-              model.\{{name.id}} << loaded unless loaded.nil?
-            end
-          end
-        \{% end %}
+				\{% for name, hash in SPECIAL_FIELDS %}
+					fields["\{{name.id}}"] = true
+					model.\{{name.id}} = [] of \{{hash[:type].id}}
+					if bson.has_key?("\{{name}}")
+						bson["\{{name}}"].not_nil!.as(BSON).each do |item|
+							loaded = \{{hash[:type].id}}.from_bson(item.value)
+							model.\{{name.id}} << loaded unless loaded.nil?
+						end
+					end
+				\{% end %}
         model
       end
 
@@ -58,23 +58,23 @@ module Mongo::ORM::EmbeddedBSON
               end
             end
           else
-            if self.\{{name.id}} != nil || !exclude_nil
-              bson["\{{name}}"] = \{{name.id}}.as(Union(\{{hash[:type].id}} | Nil))
-            end
+						if self.\{{name.id}} != nil || !exclude_nil
+							bson["\{{name}}"] = \{{name.id}}.as(Union(\{{hash[:type].id}} | Nil))
+						end
           end
-        \{% end %}
+				\{% end %}
 
-        \{% for name, hash in SPECIAL_FIELDS %}
-          count_appends = 0
-          if self.\{{name.id}} != nil || !exclude_nil
-            bson.append_array(\{{name.stringify}}) do |array_appender|
-              if self.\{{name.id}} != nil
-                self.\{{name}}.each do |item|
-                  array_appender << item.to_bson if item
-                end
-              end
-            end
-          end
+				\{% for name, hash in SPECIAL_FIELDS %}
+					count_appends = 0
+					if self.\{{name.id}} != nil || !exclude_nil
+						bson.append_array(\{{name.stringify}}) do |array_appender|
+							if self.\{{name.id}} != nil
+								self.\{{name}}.each do |item|
+									array_appender << item.to_bson if item
+								end
+							end
+						end
+					end
         \{% end %}
         bson
       end

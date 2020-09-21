@@ -54,25 +54,23 @@ struct Int64
   end
 end
 
-class BSON
-  struct ObjectId
-    def to_json(json : JSON::Builder)
-      self.to_s
-    end
+struct BSON::ObjectId
+  def to_bson
+    self
+  end
 
-    def to_s
-      buf = StaticArray(UInt8, 25).new(0_u8)
-      LibBSON.bson_oid_to_string(@handle, buf)
-      String.new(buf.to_slice).strip("\u0000")
-    end
+  def to_json
+    self.to_s
+  end
 
-    def self.from_bson(val)
-      val.as?(self)
-    end
+  def to_json(builder : JSON::Builder)
+    builder.string self.to_s
+  end
 
-    def to_bson
-      self
-    end
+  def to_s
+    buf = StaticArray(UInt8, 25).new(0_u8)
+    LibBSON.bson_oid_to_string(@handle, buf)
+    String.new(buf.to_slice).rstrip('\0')
   end
 end
 
@@ -88,29 +86,29 @@ module Mongo::ORM::Querying
         fields = {} of String => Bool
 
         \{% for name, hash in FIELDS %}
-          fields["\{{name.id}}"] = true
-          if bson.has_key?("\{{name}}")
-            model.\{{name.id}} = if \{{hash[:type].id}}.is_a? Mongo::ORM::EmbeddedDocument.class
-              if embedded = bson["\{{name}}"]?
-                \{{hash[:type].id}}.from_bson(embedded)
-              end
-            else bson.has_key?("\{{name}}")
-              bson["\{{name}}"].as(Union(\{{hash[:type].id}} | Nil))
-            end
-          end
+					fields["\{{name.id}}"] = true
+					if bson.has_key?("\{{name}}")
+						model.\{{name.id}} = if \{{hash[:type].id}}.is_a? Mongo::ORM::EmbeddedDocument.class
+							if embedded = bson["\{{name}}"]?
+								\{{hash[:type].id}}.from_bson(embedded)
+							end
+						else bson.has_key?("\{{name}}")
+							bson["\{{name}}"].as(Union(\{{hash[:type].id}} | Nil))
+						end
+					end
           \{% if hash[:type].id == Time %}
             model.\{{name.id}} = model.\{{name.id}}.not_nil!.to_utc if model.\{{name.id}}
           \{% end %}
         \{% end %}
 
-        \{% for name, hash in SPECIAL_FIELDS %}
-          fields["\{{name.id}}"] = true
-          model.\{{name.id}} = [] of \{{hash[:type].id}}
-          k = "\{{name}}"
-          if bson.has_key?("\{{name}}")
+				\{% for name, hash in SPECIAL_FIELDS %}
+					fields["\{{name.id}}"] = true
+					model.\{{name.id}} = [] of \{{hash[:type].id}}
+					k = "\{{name}}"
+					if bson.has_key?("\{{name}}")
             bson["\{{name}}"].not_nil!.as(BSON).each do |item|
-              loaded = \{{hash[:type].id}}.from_bson(item.value)
-              model.\{{name.id}} << loaded unless loaded.nil?
+							loaded = \{{hash[:type].id}}.from_bson(item.value)
+							model.\{{name.id}} << loaded unless loaded.nil?
             end
           elsif !bson.has_key?("\{{name}}") && \{{ hash }}.has_key?(:default)
             \{{hash[:default]}}
@@ -118,8 +116,15 @@ module Mongo::ORM::Querying
           end
         \{% end %}
 
-        model.clear_dirty
-        model.cache_original_values
+        \{% if SETTINGS[:timestamps] %}
+          model.created_at = bson["created_at"].as(Union(Time | Nil)) if bson["created_at"]?
+          model.updated_at = bson["updated_at"].as(Union(Time | Nil)) if bson["updated_at"]?
+          model.created_at = model.created_at.not_nil!.to_utc if model.created_at
+          model.updated_at = model.updated_at.not_nil!.to_utc if model.updated_at
+        \{% end %}
+
+				model.clear_dirty
+				model.cache_original_values
         model
       end
 
@@ -130,29 +135,44 @@ module Mongo::ORM::Querying
           if !only_dirty || self.dirty?("\{{name}}")
             field_value = \{{name.id}}
             if (!exclude_nil || !field_value.nil?) || (only_nil && field_value.nil?)
-              bson["\{{name}}"] = field_value.as(Union(\{{hash[:type].id}} | Nil))
+							bson["\{{name}}"] = field_value.as(Union(\{{hash[:type].id}} | Nil))
             end
           end
         \{% end %}
-        \{% for name, hash in SPECIAL_FIELDS %}
-          if !only_dirty || self.dirty?("\{{name}}")
-            if \{{hash[:type].id}} == String
-              if as_a = self.\{{name.id}}.as?(Array(String))
-                bson.append_array(\{{name.stringify}}) do |array_appender|
-                  as_a.each{ |strval| array_appender << strval }
-                end
-              end
-            else
-              count_appends = 0
-              if self.\{{name.id}} != nil || !exclude_nil
-                bson.append_array(\{{name.stringify}}) do |array_appender|
-                  if self.\{{name.id}} != nil
-                    self.\{{name}}.each do |item|
-                      array_appender << item.to_bson if item
-                    end
-                  end
-                end
-              end
+				\{% for name, hash in SPECIAL_FIELDS %}
+					if !only_dirty || self.dirty?("\{{name}}")
+						if \{{hash[:type].id}} == String
+							if as_a = self.\{{name.id}}.as?(Array(String))
+								bson.append_array(\{{name.stringify}}) do |array_appender|
+									as_a.each{ |strval| array_appender << strval }
+								end
+							end
+						else
+							count_appends = 0
+							if self.\{{name.id}} != nil || !exclude_nil
+								bson.append_array(\{{name.stringify}}) do |array_appender|
+									if self.\{{name.id}} != nil
+										self.\{{name}}.each do |item|
+											array_appender << item.to_bson if item
+										end
+									end
+								end
+							end
+						end
+					end
+        \{% end %}
+        \{% if SETTINGS[:timestamps] %}
+          if !only_dirty || self.dirty?("created_at")
+            field_value = self.created_at
+            if (!exclude_nil || !field_value.nil?) || (only_nil && field_value.nil?)
+              bson["created_at"] = field_value
+            end
+          end
+
+          if !only_dirty || self.dirty?("created_at")
+            field_value = self.updated_at
+            if (!exclude_nil || !field_value.nil?) || (only_nil && field_value.nil?)
+              bson["updated_at"] = field_value
             end
           end
         \{% end %}

@@ -1,6 +1,9 @@
 module Mongo::ORM::Persistence
   macro __process_persistence
 
+    @updated_at : Time | Nil
+    @created_at : Time | Nil
+
     # The save method will check to see if the primary exists yet. If it does it
     # will call the update method, otherwise it will call the create method.
     # This will update the timestamps apropriately.
@@ -11,25 +14,20 @@ module Mongo::ORM::Persistence
 					__run_before_save
 					if _id
 						__run_before_update
+						@updated_at = Time.utc
+
 						if model_id = self.id
-              if self.dirty?
-                {% if SETTINGS[:timestamps] %}
-                  self.updated_at = Time.utc
-                {% end %}
-  							fields_to_update = self.dirty_fields_to_bson
-  							fields_to_unset = self.nil_dirty_fields_to_bson
-  							Log.debug { "save() updating dirty fields: #{fields_to_update.inspect} unseting dirty fields: #{fields_to_unset.inspect}"}
-  							unless fields_to_update.empty? && fields_to_unset.empty?
-                  bson = BSON.new
-                  bson["$set"] = fields_to_update unless fields_to_update.empty?
-                  bson["$unset"] = fields_to_unset unless fields_to_unset.empty?
-  								@@collection.update({"_id" => model_id}, bson)
-  							else
-  								Log.debug { "save() skipping operation cause no actual fields to change!" }
-  							end
-              else
-                Log.debug { "save() skipping operation cause it's not dirty!" }
-              end
+							fields_to_update = self.dirty_fields_to_bson
+							fields_to_unset = self.nil_dirty_fields_to_bson
+							Log.debug { "save() updating dirty fields: #{fields_to_update.inspect} unseting dirty fields: #{fields_to_unset.inspect}"}
+							bson = BSON.new
+							bson["$set"] = fields_to_update unless fields_to_update.empty?
+							bson["$unset"] = fields_to_unset unless fields_to_unset.empty?
+							unless fields_to_update.empty? && fields_to_unset.empty?
+								@@collection.update({"_id" => model_id}, bson)
+							else
+								Log.debug { "save() skipping operation cause no dirty fields!" }
+							end
 						else
 							@errors << Mongo::ORM::Error.new(:base, "Must have an ID to update a model")
 						end
@@ -37,10 +35,8 @@ module Mongo::ORM::Persistence
 					else
 						__run_before_create
 						if self.id.nil?
-              {% if SETTINGS[:timestamps] %}
-  							self.created_at = Time.utc
-  							self.updated_at = Time.utc
-              {% end %}
+							@created_at = Time.utc
+							@updated_at = Time.utc
 							self._id = BSON::ObjectId.new
 							fields_to_update = self.to_bson(false, true)
 							Log.debug { "save() creating fields: #{fields_to_update.inspect}"}
