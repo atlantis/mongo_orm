@@ -9,12 +9,12 @@ module Mongo::ORM::Persistence
     # This will update the timestamps apropriately.
     def save
 			begin
-				if self.valid?
-					fields_to_update = BSON.new
+        if self.valid?
+        	fields_to_update = BSON.new
 					__run_before_save
-					if _id
+        	if _id
 						__run_before_update
-						@updated_at = Time.utc
+        		@updated_at = Time.utc
 
 						if model_id = self.id
 							fields_to_update = self.dirty_fields_to_bson

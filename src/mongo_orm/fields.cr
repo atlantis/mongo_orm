@@ -70,7 +70,6 @@ module Mongo::ORM::Fields
     # Create the properties
 		{% for name, hash in FIELDS %}
 			{% unless hash[:default].nil? %}
-				Log.warn {  "Setting defaulg value for field {{name.id}} to #{{{hash[:default]}}.inspect}" }
 				@{{name.id}} : {{hash[:type]}}? = {{hash[:default]}}
 			{% end %}
 
